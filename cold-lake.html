@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html><head>
+    <title>Cold Lake — James Every</title>
+    <link rel="shortcut icon" type="image/jpg" href="./images/favicon/glider.ico"/>
+
+    <meta charset="utf-8">
+    <meta http-equiv="Content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="description"
+        content="The writings and projects of James Every." />
+    <meta property="og:title" content="About" />
+    <meta property="og:url" content="https://jamesevery.com" />
+    <meta property="og:description"
+        content="The writings and projects of James Every." />
+    <meta property="og:type" content="website" />
+
+    <link rel="stylesheet" href="./css/style.min.css" />
+    <style type="text/css">
+    </style>    
+</head>
+
+<body>
+<div>
+
+<body id="top">
+  <header>
+    <h1>
+	    Cutting Bootstraps with Occam's Razor: Exploiting Logic Flaws in Secure Boot
+    </h1>
+	    </h2>
+    <p class="author">
+      James Every <br />
+      August 2023
+    </p>
+  </header>
+
+    <div class="abstract">
+      <h2>Abstract</h2>
+
+<p>
+      This page is a walkthrough for <a href="https://microcorruption.com/debugger/Cold%20Lake">Cold Lake</a>, the third in a <a href="https://research.nccgroup.com/2022/10/31/check-out-our-new-microcorruption-challenges/">recent</a> <a href="https://microcorruption.com/map">series</a> of reverse engineering challenges from the Embedded Systems division at NCC Group.
+      </p>
+    </div>
+
+    <h2>
+	    Overview
+    </h2>
+
+    <b>First Working Exploit:</b> 0901 UTC, March 9th, 2023
+    <br>
+    <b>Blockchain Timestamp:</b> 1114 UTC, March 9th, 2023
+    <br>
+    <b>Pastebin Timestamp:</b>
+    <a href="https://pastebin.com/vmXquD91">pastebin.com/vmXquD91</a>
+    <br>
+        <b><a href="https://opentimestamps.org">Cryptographic Proof of Existence</a>:</b> <a href="./solutions/cold-lake/solution.txt">solution.txt</a> <a href="./solutions/cold-lake/solution.txt.ots">solution.txt.ots</a>
+    <br>
+    <b>Solve Count At Time Of Writing:</b> Unknown<label for="sn-2" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-2" class="sidenote-toggle" />
+<span class="sidenote">
+A backend bug breaks the solve counters for Cold Lake and Churchill. 
+</span>
+    <br>
+    <b>Solves Per month:</b> Unknown
+    <br>
+    <b>Reading Time:</b> 8 minutes
+
+    <p>This version removes the ed25519 private key from memory and modifies the secure boot implementation. The goal is once again to circumvent the signature check to achieve arbitrary code execution.</p>
+
+<p>The debug payload has three separate segments. The example payload is below.</p>
+
+<pre><code class="asm">Load address:
+8000
+
+Program text:
+3540088000450545054505450545054505450f433041
+
+Signature:
+8605e027f42368ea6bba9de66409f6a8ddedcd49614a4648281c47a7b4ad252f5639069b17ba8ff104d371e2d8a625b038f0750667364087e7987e40ea81510f
+</code></pre>
+
+<p>The initial I/O console messages are as follows:</p>
+
+<pre><code class="asm">Welcome to the secure program loader.
+Please enter second stage load address.
+</code></pre>
+
+<h2>High-Level Analysis</h2>
+
+<p>Running the firmware with the example debug payload will produce the following output at the I/O console:</p>
+
+<pre><code class="asm">Welcome to the secure program loader.
+Please enter second stage load address.
+Please enter the second stage program.
+Please enter program signature.
+Load address outside allowed range of 0x8000-0xF000
+Please enter second stage load address.
+</code></pre>
+
+<p>Something is immediately wrong, as the debug payload prints the above error message and does not reach the second stage load address at address <code>0x8000</code>. The payload format is identical to St. John's except for being broken into three sections. Given that the error message is about the load address, something must be wrong with the first two-byte payload section. The code that parses these bytes seems to load them as a word rather than individual bytes.</p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/cold-lake-load-address-format.png"
+          loading="lazy" alt="Load address parsing code." />
+      </figure>
+<hr>
+
+
+<p>The load address should be in little-endian format: <code>0x0080</code> instead of <code>0x8000</code>.</p>
+
+<pre><code class="asm">Load address:
+<mark>0080</mark>
+
+Program text:
+3540088000450545054505450545054505450f433041
+
+Signature:
+8605e027f42368ea6bba9de66409f6a8ddedcd49614a4648281c47a7b4ad252f5639069b17ba8ff104d371e2d8a625b038f0750667364087e7987e40ea81510f
+</code></pre>
+
+<p>Making this tweak and re-submitting the three-stage payload results in the following output:</p>
+
+<pre><code class="asm">Welcome to the secure program loader.
+Please enter second stage load address.
+Please enter the second stage program.
+Please enter program signature.
+Signature valid, executing payload
+ACCESS DENIED
+Please enter second stage load address.
+</code></pre>
+
+<p>This results in the signature check passing and the code jumping to address <code>0x8000</code>. The example debug payload is now functional.</p>
+
+<h2>Static Analysis</h2>
+
+<p>The first goal is to compare the implementation with the one from St. John's and see what has changed. The flow control graph for the main function is as follows:</p>
+
+<br>
+      <figure>
+        <img src="./images/cold-lake-main-flow-control.png"
+          loading="lazy" alt="Main function flow control graph." />
+      </figure>
+
+      <p>The defined strings are listed in the table below, as well as the address of the conditional block that prints them in the <code>main</code> function.</p>
+
+      <br>
+      <table>
+        <caption>Defined Strings</caption>
+        <thead>
+          <tr>
+            <th>String Address</th>
+            <th>String</th>
+            <th>Address of Conditional Block Containing Referencing Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		<td>4656</td>
+		<td>"Welcome to the secure program loader."</td>
+		<td>443e</td>
+          </tr>
+          <tr>
+		<td>473f</td>
+		<td>"Signature valid, executing payload"</td>
+		<td>44ea</td>
+          </tr>
+          <tr>
+		<td>46a4</td>
+		<td>"Please enter the second stage program."</td>
+		<td>444a</td>
+          </tr>
+          <tr>
+		<td>467c</td>
+		<td>"Please enter second stage load address."</td>
+		<td>444a</td>
+          </tr>
+          <tr>
+		<td>46cb</td>
+		<td>"Please enter program signature."</td>
+		<td>444a</td>
+          </tr>
+          <tr>
+		<td>46eb</td>
+		<td>"Load address outside allowed range of 0x8000-0xF000"</td>
+		<td>44b2</td>
+          </tr>
+          <tr>
+		<td>471f</td>
+		<td>"Incorrect signature, continuing"</td>
+		<td>44e0</td>
+          </tr>
+          <tr>
+		<td>4762</td>
+		<td>"ACCESS GRANTED"</td>
+		<td>44fa</td>
+          </tr>
+          <tr>
+		<td>4771</td>
+		<td>"ACCESS DENIED"</td>
+		<td>4518</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Reaching the conditional block at address <code>0x44ea</code> is the objective, with the debug payload executing at address <code>0x44f2</code>.</p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/cold-lake-target-conditional.png"
+          loading="lazy" alt="Target conditional block for code execution." />
+      </figure>
+<hr>
+
+<p>The misalignment check from St. John's is no longer present. The invalid payload length check is also missing, and the payload format does not include a size field at all (with the maximum value being hardcoded to <code>0x100</code>). All of this can be verified by examining the parameters passed to <code>verify_ed25519</code>.</p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/cold-lake-hardcoded-size.png"
+          loading="lazy" alt="Hardcoded size." />
+      </figure>
+<hr>
+
+<h2>Dynamic Analysis</h2>
+<p>The next step is ensuring that signature verification works properly, accomplished by flipping bits in each payload section during each respective run.</p>
+
+<p><b>Payload:</b></p>
+<pre><code class="asm">Load address:
+0080
+
+Program text:
+<mark>ff</mark>40088000450545054505450545054505450f433041
+
+Signature:
+8605e027f42368ea6bba9de66409f6a8ddedcd49614a4648281c47a7b4ad252f5639069b17ba8ff104d371e2d8a625b038f0750667364087e7987e40ea81510f
+</code></pre>
+
+<p><b>I/O console output:</b></p>
+
+<pre><code class="asm">Incorrect signature, continuing
+</code></pre>
+
+<p><b>Payload:</b></p>
+<pre><code class="asm">Load address:
+0080
+
+Program text:
+3540088000450545054505450545054505450f433041
+
+Signature:
+<mark>ff</mark>05e027f42368ea6bba9de66409f6a8ddedcd49614a4648281c47a7b4ad252f5639069b17ba8ff104d371e2d8a625b038f0750667364087e7987e40ea81510f
+</code></pre>
+
+<p><b>I/O console output:</b></p>
+
+<pre><code class="asm">Incorrect signature, continuing
+</code></pre>
+
+<p><b>Payload:</b></p>
+<pre><code class="asm">Load address:
+00<mark>90</mark>
+
+Program text:
+3540088000450545054505450545054505450f433041
+
+Signature:
+8605e027f42368ea6bba9de66409f6a8ddedcd49614a4648281c47a7b4ad252f5639069b17ba8ff104d371e2d8a625b038f0750667364087e7987e40ea81510f
+</code></pre>
+
+<p><b>I/O console output:</b></p>
+
+<pre><code class="asm">Signature valid, executing payload
+</code></pre>
+
+<h3>Unsigned Load Address</h3>
+
+<p>The load address is not signed, allowing alteration without affecting the signature check. This bug permits passing arbitrary values as a load address, which implies that it might be possible to write the debug payload to any offset in memory—effectively acting as a random write primitive.</p>
+
+<p>This payload attempts to overwrite the entrypoint at address <code>0x4400</code> as a proof of concept:</p>
+
+<pre><code class="asm">Load address:
+00<mark>44</mark>
+
+Program text:
+3540088000450545054505450545054505450f433041
+
+Signature:
+8605e027f42368ea6bba9de66409f6a8ddedcd49614a4648281c47a7b4ad252f5639069b17ba8ff104d371e2d8a625b038f0750667364087e7987e40ea81510f
+</code></pre>
+
+<p><b>I/O console output:</b></p>
+
+<pre><code class="asm">Load address outside allowed range of 0x8000-0xF000
+</code></pre>
+
+<p>The restriction on the address range rules out random writes, suggesting the presence of a different vulnerability.</p>
+
+<h3>Spraying Arbitrary Data</h3>
+
+<p>One behavior is worth observing: the executable part of the payload is stored at the load address before the signature check occurs, and the implementation does not overwrite this region with zeros after signature verification failure. The following payloads execute sequentially during a single run.</p>
+
+
+<p><b>Payload:</b></p>
+<pre><code class="asm">Load address:
+0080
+
+Program text:
+aaaaaaaaaaaaaaaa
+
+Signature:
+ff
+</code></pre>
+
+<p><b>I/O console output:</b></p>
+
+<pre><code class="asm">Incorrect signature, continuing
+</code></pre>
+
+<p><b>Payload:</b></p>
+<pre><code class="asm">Load address:
+1080
+
+Program text:
+bbbbbbbbbbbbbbbb
+
+Signature:
+ff
+</code></pre>
+
+<p><b>I/O console output:</b></p>
+
+<pre><code class="asm">Incorrect signature, continuing
+</code></pre>
+
+<p><b>Payload:</b></p>
+<pre><code class="asm">Load address:
+2080
+
+Program text:
+cccccccccccccccc
+
+Signature:
+ff
+</code></pre>
+
+<p><b>I/O console output:</b></p>
+
+<pre><code class="asm">Incorrect signature, continuing
+</code></pre>
+<p>The payload's executable code segment is written to the load address regardless of whether the signature check passes, so the signature field is set to a dummy value of 0xFF. The code segment fails to execute but is not overwritten with zeros when the signature check fails.</p>
+
+<pre><code class="asm">8000: <mark>aaaa aaaa aaaa aaaa</mark> 0000 0000 0000 0000   ................
+8010: <mark>bbbb bbbb bbbb bbbb</mark> 0000 0000 0000 0000   ................
+8020: <mark>cccc cccc cccc cccc</mark> 0000 0000 0000 0000   ................
+8030: 0000 0000 0000 0000 0000 0000 0000 0000   ................
+</code></pre>
+
+<p>This behavior enables an attacker to spray arbitrary data into the <code>0x8000-0xF000</code> range, which is not immediately useful because it does not provide a way to redirect execution flow. However, it is still a potentially exploitable design flaw that is abusable in conjunction with a second vulnerability.</p>
+
+<h2>Debug Payload Vulnerability</h2>
+
+<p>The implementation seems sound based on a review of the disassembly. A vulnerability would thus lie in one of two places: the ed25519 backend code or the example debug payload itself. Given the choice between attacking the cryptographic implementation or a logical flaw in the debug payload, the latter probably requires less effort.</p>
+
+      <h3 id="tables">Sample Debug Payload Format</h3>
+      <table>
+        <caption>Parsing Format</caption>
+        <thead>
+          <tr>
+            <th>Load Address</th>
+            <th>Executable code</th>
+            <th>Signature</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+                  <td><code>0080</code></td>
+                  <td><code>3540088000450545054505450545054505450f433041</code></td>
+                  <td><code>8605e027f42368ea6...</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+<p>The executable code in the example debug payload disassembles to the following:</p>
+
+
+<pre><code class="asm"><xmp>3540 0880      mov	#0x8008, r5
+0045           br	r5
+0545           mov	r5, r5
+0545           mov	r5, r5
+0545           mov	r5, r5
+0545           mov	r5, r5
+0545           mov	r5, r5
+0545           mov	r5, r5
+0f43           clr	r15
+3041           ret
+</xmp></code></pre>
+
+<h4>Vulnerable Branch</h4>
+      <table>
+        <caption>Vulnerable Code in Debug Payload</caption>
+        <thead>
+          <tr>
+            <th>Opcodes</th>
+            <th>Disassembly</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+                  <td><code>3540 0880</code></td>
+                  <td><code>mov #0x8008, r5</code></td>
+          </tr>
+          <tr>
+		  <td><code>0045</code></td>
+                  <td><code>br r5</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>The issue stems from a lack of position independence in the payload code. The following explanation is helpful for those unfamiliar with the difference between absolute and position-independent code:</p>
+
+      <blockquote>
+In computing, position-independent code (PIC) or position-independent executable (PIE) is a body of machine code that, being placed somewhere in the primary memory, executes properly regardless of its absolute address. [...] This differs from absolute code, which must be loaded at a specific location to function correctly, and load-time locatable (LTL) code, in which a linker or program loader modifies a program before execution, so it can be run only from a particular memory location. Generating position-independent code is often the default behavior for compilers, but they may place restrictions on the use of some language features, such as disallowing use of absolute addresses (position-independent code has to use relative addressing).
+<cite>— <a href="https://en.wikipedia.org/wiki/Position-independent_code">Wikipedia</a></cite>
+      </blockquote>
+
+      <p>The payload code is always assumed to be loaded at address 0x8000, even though the firmware allows any address in the <code>0x8000-0xF000</code> range. The payload executable segment code is not position-independent even though the "secure program loader" assumes otherwise.</p>
+
+      <p>The code behaves as follows if it is loaded at address <code>0x8000</code> as expected:</p>
+<br>
+      <figure>
+        <img src="./images/cold-lake-pic-normal.png"
+          loading="lazy" alt="Payload behavior if it is loaded at address 0x8000." />
+      </figure>
+
+      <p>Changing the example payload load address to <code>0x9000</code> results in the following behavior:</p>
+
+      <figure>
+        <img src="./images/cold-lake-pic-vuln.png"
+          loading="lazy" alt="Payload behavior if it is loaded at address 0x9000." />
+      </figure>
+
+      <p>Execution will branch to null memory at address <code>0x8008</code> (the value <code>0x0000</code> disassembles to the <code>RRC PC</code> instruction) and promptly crash.</p>
+
+      <h3>Exploitation</h3>
+      <p>This crash is not exploitable in isolation but can be combined with the previous vulnerability to achieve code execution. Spraying malicious code at address <code>0x8008</code> beforehand is the only requirement. The behavior will then be as follows:</p>
+
+      <br>
+      <figure>
+        <img src="./images/cold-lake-pic-exploit.png"
+          loading="lazy" alt="Payload behavior if it is loaded at address 0x9000 and shellcode is sprayed at 0x8008." />
+      </figure>
+
+      <p>This exploit should trigger the unlock interrupt, return from the interrupt callgate, and crash. In theory, this is proof of arbitrary code execution.</p>
+
+<h2>Arbitrary Code Execution</h2>
+
+<p>Developing a working exploit is accomplishable by reusing the portable shellcode from Vancouver. First, store the shellcode at address <code>0x8008</code>:</p>
+
+
+<pre><code class="asm"><xmp>Load address:
+0880
+
+Program text:
+324000ffb0121000
+
+Signature:
+ff
+</xmp></code></pre>
+
+<p>After the signature verification fails and main loops, provide the legitimate debug payload with a deliberately altered load address:</p>
+
+<pre><code class="asm"><xmp>Load address:
+0090
+
+Program text:
+3540088000450545054505450545054505450f433041
+
+Signature:
+8605e027f42368ea6bba9de66409f6a8ddedcd49614a4648281c47a7b4ad252f5639069b17ba8ff104d371e2d8a625b038f0750667364087e7987e40ea81510f
+</xmp></code></pre>
+
+<p>Execution branches to address 0x8008, the malicious shellcode executes, and the unlock interrupt is triggered.</p>
+
+<pre></code>Door Unlocked
+The CPU completed in 24747 cycles.</code></pre>
+
+<h2>Remediation</h2>
+<p>While this exploit is relatively straightforward to write, the cause of this type of underlying vulnerability may be subtle. The debug payload is relatively short, and the assembly may be hand-written, but larger payloads tend towards implementation in C. It is possible to introduce this vulnerability by changing one compiler flag.</p>
+
+<p>The naive answer is to fix the toolchain (i.e., code should be truly position-independent), but superior approaches exist.</p>
+
+
+<h5>1. Perform continuous security testing during development.</h5>
+
+<p>The vulnerabilities in previous firmware versions are usually symptoms of systemic problems. Lack of developer education, technical controls, and standard operating procedures are likely culprits. The vulnerabilities are obvious enough that even rudimentary best practices would likely catch them.</p>
+
+<p>This problem is nuanced because it can exist even with all of the above measures present, necessitating dedicated security staff (separate from the developers) to perform code reviews during development and before releases.</p>
+
+
+<h5>2. Apply the Principle of Least Functionality.</h5>
+<p>Specific vulnerabilities aside, this implementation is overly complex and violates the Principle of Least Functionality.<label for="sn-2" class="sidenote-toggle sidenote-number"></label>
+
+
+<input type="checkbox" id="sn-2" class="sidenote-toggle" />
+<span class="sidenote">This is a concept related to (but not to be confused with) the Principle of Least Privilege.
+</span>
+
+Multiple features should not exist.</p>
+
+<ol>
+    <li><b>The load address should be impossible to alter.</b></li>
+    Sign the entire payload as a best practice. It should also be impossible to specify arbitrary load addresses in the first place. The implementation should load debug payloads at a fixed address.
+    <li><b>Avoid writing untrusted input to the load address before signature verification.</b></li>
+    This logic is similar to the <a href="https://moxie.org/2011/12/13/the-cryptographic-doom-principle.html">Cryptographic Doom Principle</a>.</li>
+    <li><b>Overwrite input buffers with zeroes between iterations.</b></li>
+    Data should not persist in memory past its lifetime, regardless of whether the signature verification check passes.
+</ol>
+
+<h5>3. Ensure all debug payload code is truly position-independent.</h5>
+
+<p>While this does technically patch the vulnerability, it is not an optimal solution compared to the previous alternatives. It is unreasonable to rely on the developers responsible for writing the debug payloads to anticipate issues like this.<label for="sn-2" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-2" class="sidenote-toggle" />
+<span class="sidenote">It is reasonable to treat payload developers as third parties (even if they are part of the same team) for reasons purely related to quality assurance—let alone security.
+</span>
+
+The implementation itself is not technically vulnerable as designed, but it is difficult for developers to avoid compiling vulnerable code that will run within it.</p>
+
+<p>Implementations should attempt to minimize weird corner cases. It is not incumbent on developers to enumerate or understand them. A system that is easy to misconfigure due to excessive complexity is broken.</p>
+</body></html>

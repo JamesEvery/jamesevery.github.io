@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html><head>
+    <title>Baku — James Every</title>
+    <link rel="shortcut icon" type="image/jpg" href="./images/favicon/glider.ico"/>
+
+    <meta charset="utf-8">
+    <meta http-equiv="Content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="description"
+        content="The writings and projects of James Every." />
+    <meta property="og:title" content="About" />
+    <meta property="og:url" content="https://jamesevery.com" />
+    <meta property="og:description"
+        content="The writings and projects of James Every." />
+    <meta property="og:type" content="website" />
+
+    <link rel="stylesheet" href="./css/style.min.css" />
+    <style type="text/css">
+.language-ascii-art {
+ display: inline-block;
+ font-family: "Lucida Console", Monaco, monospace;
+ letter-spacing: -0.2em;
+ line-height: 0.8em;
+ text-shadow: 0 0 5px rgba(100,100,100,0.5);
+}   
+
+.language-ascii-noshadows {
+ display: inline-block;
+ letter-spacing: 0em;
+ line-height: 1.16em;
+}
+    </style>    
+</head>
+
+<body>
+<div>
+
+<body id="top">
+  <header>
+    <h1>
+	    Military Grade Encryption: Reverse Engineering Custom Embedded AES Implementations
+    </h1>
+	    </h2>
+    <p class="author">
+      James Every <br />
+      November 2023
+    </p>
+  </header>
+
+    <div class="abstract">
+      <h2>Abstract</h2>
+      <p>
+      This page is a walkthrough for <a href="https://microcorruption.com/debugger/Baku">Baku</a>, the fifth in a <a href="https://research.nccgroup.com/2022/10/31/check-out-our-new-microcorruption-challenges/">recent</a> <a href="https://microcorruption.com/map">series</a> of reverse engineering challenges from the Embedded Systems division at NCC Group.
+      </p>
+    </div>
+
+    <h2>
+	    Overview
+    </h2>
+
+    <b>First Working Exploit:</b> 0514 UTC, March 8th, 2023
+    <br>
+    <b>Blockchain Timestamp:</b> 0709 UTC, March 8th, 2023
+    <br>
+    <b>Pastebin Timestamp:</b>
+    <a href="https://pastebin.com/hhUbv9Nb">pastebin.com/hhUbv9Nb</a>
+    <br>
+    <b><a href="https://opentimestamps.org">Cryptographic Proof of Existence</a>:</b> <a href="./solutions/baku/solution.txt">solution.txt</a> <a href="./solutions/baku/solution.txt.ots">solution.txt.ots</a>
+    <br>
+    <b>Solve Count At Time Of Writing:</b> 54
+    <br>
+    <b>Solves Per month:</b> 4.22
+    <br>
+    <b>Reading Time:</b> 23 minutes
+
+    <p>This challenge is a departure from the previous ones. This iteration uses a custom AES implementation running in ECB mode as an authentication mechanism. Successfully circumventing this protection will allow the program to reach the conditional block at address <code>0x447c</code> and directly trigger the unlock interrupt.</p>    
+
+    <p>The Ghidra flow control graph is as follows:</p>
+<br>
+      <figure>
+        <img src="./images/baku-main-flow-control.png"
+          loading="lazy" alt="Main function flow control graph." />
+      </figure>
+
+    <p>Running the firmware will produce the following output at the console:</p>
+
+<pre><code class="asm">SCAN SECURITY DEVICE</code></pre>
+
+<p>Supplying "password" at the prompt causes the I/O console to print the above message again, with no visible effect otherwise.</p>
+
+<h2>High-Level Analysis</h2>
+
+<p>The initial assumption is naturally that this is an ECB oracle, but one of those, by definition, must return encrypted or decrypted data. This system does not seem to have status messages of any kind—evidenced by the defined strings.</p>
+
+
+<h3 id="tables">Status Messages</h3>
+      <table>
+        <caption>Defined Strings</caption>
+        <thead>
+          <tr>
+            <th>Address</th>
+            <th>String</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td>487a</td>
+		  <td>"SCAN SECURITY DEVICE"</td>
+          </tr>
+          <tr>
+		  <td>488f</td>
+		  <td>"ACCESS GRANTED!"</td>
+          </tr>
+          <tr>
+		  <td>489f</td>
+		  <td>"ACCESS GRANTED"</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>The repetition of "ACCESS GRANTED" and the subtle difference between the two instances is worth noting. The fact that there are multiple similar strings suggests that the firmware references them for different purposes. Several lines in the <code>main</code> function indicate as much:</p>
+
+
+<pre><code class="asm">444e:  mov	#0x487a "<mark>SCAN SECURITY DEVICE</mark>", r15
+4452:  call	#0x44d6 &lt;puts&gt;
+</code></pre>
+
+<pre><code class="asm">4466:  call	#0x46fa &lt;aes_ecb_decrypt&gt;
+446a:  mov	#0x10, r13
+446e:  mov	sp, r14
+4470:  mov	#0x488f "<mark>ACCESS GRANTED!</mark>", r15
+4474:  call	#0x47ee &lt;memcmp&gt;
+</code></pre>
+
+<pre><code class="asm">447c:  mov	#0x489f "<mark>ACCESS GRANTED</mark>", r15
+4480:  call	#0x44d6 &lt;puts&gt;
+</code></pre>
+
+<p>The first and third strings appear to be printed to the console with <code>puts</code>, while the second is compared to something else (probably the output from <code>aes_ecb_decrypt</code>) using <code>memcmp</code>. The firmware may reference this string as a key or password.</p>
+
+<h3>Developer Psychology</h3>
+<p>Before getting into a more detailed analysis, it is reasonable to assume a few things:<p>
+<ol>
+	<li><code>The aes_ecb_decrypt</code> function takes some user input and processes it somehow.</li>
+	<li>The firmware compares the result of this black box operation to the string "ACCESS GRANTED!".</li>
+	<li>If the string matches, the unlock interrupt is triggered.</li>
+</ol>
+
+<p>Ignoring the name of the function and the value the result is being compared to, this is strangely reminiscent of a hashing-based password authentication scheme. The implementation confuses irreversible hashing algorithms with reversible encryption algorithms. An encrypted password is possible to recover for anyone who knows the key. The key typically resides in the same volatile memory as the firmware on this class of embedded device, which means that it is possible to extract the key, reverse the encryption operation to obtain the original password and authenticate to the device using that credential.</p>
+
+<p>The main exception to this rule is when the platform stores the key in a secure enclave, TPM, or HSM, which is unlikely because the decryption function would need a visible way to interface with that system. That would require calling a new interrupt (which would most likely be undocumented). No such interrupt calls exist, which can be verified by examining the incoming references to the interrupt call gate at address <code>0x10</code>.</p>
+<br>
+      <figure>
+        <img src="./images/baku-int-call-tree.png"
+          loading="lazy" alt="Ghidra call tree for the interrupt call gate." />
+        </figcaption>
+      </figure>
+</span>
+</p>
+
+<p>If the firmware stores the key in an inaccessible external device (i.e., an HSM), the decryption operation performed by <code>aes_ecb_decrypt</code> would require an interrupt call to either read the key or have the external device itself decrypt the data.</p>
+
+<p>The following snippets are all of the calls to address <code>0x10</code> that exist in the firmware:</p>
+
+<pre><code>4484: push	#0x0
+4486: push	#0x0
+4488: push	<mark>#0x7f</mark>
+448c: call	#0x44a0 &lt;INT&gt;
+</code></pre>
+
+<pre><code>44b8: push	r14
+44ba: push	r15
+44bc: push	<mark>#0x2</mark>
+44be: call	#0x44a0 &lt;INT&gt;
+</code></pre>
+
+<pre><code>44c8: sxt	r15
+44ca: push	r15
+44cc: push	<mark>#0x0</mark>
+44ce: call	#0x44a0 &lt;INT&gt;
+</code></pre>
+
+<p>Interrupts zero, two, and 0x7f are all documented in the supplied <a href="https://microcorruption.com/public/manual.pdf">manual PDF</a>. None of them have anything to do with secure enclaves, HSMs, or TPMs. With that possibility ruled out, the only reasonable goal is cryptographic key extraction.</p>
+
+<p>The flaw in this implementation is that the developers opted to use encryption where they should have used hashing. Even when hash extraction is feasible, brute-forcing is still required to locate an input that could generate that hash—which might not be cryptographically feasible given a sufficiently long password.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">There are other flaws with this implementation. A global hardcoded credential is still a single point of failure, regardless of the choice of hashing or encryption. 
+</span>
+</p>
+
+<h3>Implementing AES-ECB in Python</h3>
+
+<p>AES is a symmetric cipher. Both encrypt and decrypt operations take two parameters: a key and a message. The constraints are that the message length must be a multiple of 16, and the key must be 16, 24, or 32 bytes long.</p>
+
+<p>Proceeding from the assumption that <code>aes_ecb_decrypt</code> will be similar to any other AES-ECB implementation, the following Python code illustrates roughly how the cipher works:</p>
+
+<pre><code class="asm">from Crypto.Cipher import AES
+import binascii
+
+def decrypt(key, message):
+	cipher = AES.new(key, AES.MODE_ECB)
+	return cipher.decrypt(message)
+
+def encrypt(key, message):
+	cipher = AES.new(key, AES.MODE_ECB)
+	return cipher.encrypt(message)
+</code></pre>
+
+Executing the above functions with dummy messages and keys produces the following output at a Python REPL:
+
+<pre><code><xmp>$ python3 -i ecb.py
+>>> ciphertext = encrypt(b'ABCDEFGHIJKLMNOP', b'AAAAAAAAAAAAAAAA')
+>>> binascii.hexlify(ciphertext)
+b'a8e78383ad04d6be3e6e66a57ac8a105'
+
+>>> decrypt(b'ABCDEFGHIJKLMNOP', ciphertext)
+b'AAAAAAAAAAAAAAAA'
+</xmp></code></pre>
+
+<h3>Identifying Parameters</h3>
+
+<p>The "ACCESS GRANTED!" string at address <code>0x488f</code> is 16 bytes long (counting the null terminator), making it plausible as either a key or a message.</p>
+
+<pre><code>4880: 4543 5552 4954 5920 4445 5649 4345 00<mark>41</mark>   ECURITY DEVICE.A
+4890: <mark>4343 4553 5320 4752 414e 5445 4421 00</mark>41   CCESS GRANTED!.A
+</code></pre>
+
+<p>The firmware moves a pointer to address <code>0x48ae</code> into <code>R15</code> shortly before the call to <code>aes_ecb_decrypt</code>, which suggests that it is the second parameter.</p>
+
+
+<br>
+      <figure>
+        <img src="./images/baku-second-parameter.png"
+	     loading="lazy" alt="Second parameter for aes_ecb_decrypt."/>
+      </figure>
+
+<p>The data at this location appears random, and it is not immediately clear how long it is.</p>
+
+<pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 <mark>7f78</mark>
+48b0: <mark>75e0 c977 d30c e85e ca19 d022 11f7 4b53</mark>
+48c0: <mark>0b31 b5cd 58d3 f59d c5a9 c583 c4f3 6f1a</mark>
+48d0: <mark>f5bb fe9e 53e2 4050 9d7a 301e 015a 6259</mark>
+48e0: <mark>a739 9184 a659 bece ce98 704e 9c20 5393</mark>
+48f0: <mark>45a8 f3dd 0160 2f4a 68c1 ce80 52b8 7007</mark>
+4900: <mark>6c8b a04e 44c8 dc97 69a1 e1ca 3a79 ff47</mark>
+4910: <mark>b02e d049 2843 7cd9 2d69 3d5d 53d8 d980</mark>
+4920: <mark>482f 2f0e 986d ac90 052a 4184 7eb1 7dcd</mark>
+4930: <mark>0f8e f68e d042 839e 9d47 ed14 7b9b f213</mark>
+4940: <mark>8f14 8b43 dfcc 7510 4d05 6e8a e6dc 7b2f</mark>
+4950: <mark>0d18 8af1 fa20 493c d251 f10b bcb5 5209</mark>
+4960: <mark>6ad5 3036 a538 bf40 a39e 81f3 d7fb 7ce3</mark>
+4970: <mark>3982 9b2f ff87 348e 4344 c4de e9cb 547b</mark>
+4980: <mark>9432 a6c2 233d ee4c 950b 42fa c34e 082e</mark>
+4990: <mark>a166 28d9 24b2 765b a249 6d8b d125 72f8</mark>
+49a0: <mark>f664 8668 9816 d4a4 5ccc 5d65 b692 6c70</mark>
+49b0: <mark>4850 fded b9da 5e15 4657 a78d 9d84 90d8</mark>
+49c0: <mark>ab00 8cbc d30a f7e4 5805 b8b3 4506 d02c</mark>
+49d0: <mark>1e8f ca3f 0f02 c1af bd03 0113 8a6b 3a91</mark>
+49e0: <mark>1141 4f67 dcea 97f2 cfce f0b4 e673 96ac</mark>
+49f0: <mark>7422 e7ad 3585 e2f9 37e8 1c75 df6e 47f1</mark>
+4a00: <mark>1a71 1d29 c589 6fb7 620e aa18 be1b fc56</mark>
+4a10: <mark>3e4b c6d2 7920 9adb c0fe 78cd 5af4 1fdd</mark>
+4a20: <mark>a833 8807 c731 b112 1059 2780 ec5f 6051</mark>
+4a30: <mark>7fa9 19b5 4a0d 2de5 7a9f 93c9 9cef a0e0</mark>
+4a40: <mark>3b4d ae2a f5b0 c8eb bb3c 8353 9961 172b</mark>
+4a50: <mark>047e ba77 d626 e169 1463 5521 0c7d</mark> 0000
+4a60: 0000 0000 0000 0000 0000 0000 0000 0000
+</code></pre>
+
+<p>There are 432 bytes of data between address <code>48ae</code> and the first null word, equivalent to twenty-seven 16-byte chunks.</p>
+
+<pre><code><xmp>python3
+>>> import binascii
+>>> data = b''
+...
+... data += (binascii.unhexlify('7f7875e0c977d30ce85eca19d02211f7'))
+... data += (binascii.unhexlify('4b530b31b5cd58d3f59dc5a9c583c4f3'))
+... data += (binascii.unhexlify('6f1af5bbfe9e53e240509d7a301e015a'))
+... data += (binascii.unhexlify('6259a7399184a659becece98704e9c20'))
+... data += (binascii.unhexlify('539345a8f3dd01602f4a68c1ce8052b8'))
+... data += (binascii.unhexlify('70076c8ba04e44c8dc9769a1e1ca3a79'))
+... data += (binascii.unhexlify('ff47b02ed04928437cd92d693d5d53d8'))
+... data += (binascii.unhexlify('d980482f2f0e986dac90052a41847eb1'))
+... data += (binascii.unhexlify('7dcd0f8ef68ed042839e9d47ed147b9b'))
+... data += (binascii.unhexlify('f2138f148b43dfcc75104d056e8ae6dc'))
+... data += (binascii.unhexlify('7b2f0d188af1fa20493cd251f10bbcb5'))
+... data += (binascii.unhexlify('52096ad53036a538bf40a39e81f3d7fb'))
+... data += (binascii.unhexlify('7ce339829b2fff87348e4344c4dee9cb'))
+... data += (binascii.unhexlify('547b9432a6c2233dee4c950b42fac34e'))
+... data += (binascii.unhexlify('082ea16628d924b2765ba2496d8bd125'))
+... data += (binascii.unhexlify('72f8f66486689816d4a45ccc5d65b692'))
+... data += (binascii.unhexlify('6c704850fdedb9da5e154657a78d9d84'))
+... data += (binascii.unhexlify('90d8ab008cbcd30af7e45805b8b34506'))
+... data += (binascii.unhexlify('d02c1e8fca3f0f02c1afbd0301138a6b'))
+... data += (binascii.unhexlify('3a9111414f67dcea97f2cfcef0b4e673'))
+... data += (binascii.unhexlify('96ac7422e7ad3585e2f937e81c75df6e'))
+... data += (binascii.unhexlify('47f11a711d29c5896fb7620eaa18be1b'))
+... data += (binascii.unhexlify('fc563e4bc6d279209adbc0fe78cd5af4'))
+... data += (binascii.unhexlify('1fdda8338807c731b11210592780ec5f'))
+... data += (binascii.unhexlify('60517fa919b54a0d2de57a9f93c99cef'))
+... data += (binascii.unhexlify('a0e03b4dae2af5b0c8ebbb3c83539961'))
+... data += (binascii.unhexlify('172b047eba77d626e169146355210c7d'))
+
+>>> len(data)
+432
+
+>>> len(data)/16
+27.0
+</xmp></code></pre>
+
+<p>Supposing the <code>aes_ecb_decrypt</code> function does indeed perform a decryption operation, a reasonable starting point would be to assume that the data at address <code>0x48ae</code> is a 16, 24, or 32-byte key.</p>
+
+<pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 <mark>7f78</mark>
+48b0: <mark>75e0 c977 d30c e85e ca19 d022 11f7</mark> 4b53
+48c0: 0b31 b5cd 58d3 f59d c5a9 c583 c4f3 6f1a
+</code></pre>
+
+<pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 <mark>7f78</mark>
+48b0: <mark>75e0 c977 d30c e85e ca19 d022 11f7 4b53</mark>
+48c0: <mark>0b31 b5cd 58d3</mark> f59d c5a9 c583 c4f3 6f1a
+</code></pre>
+
+<pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 <mark>7f78</mark>
+48b0: <mark>75e0 c977 d30c e85e ca19 d022 11f7 4b53</mark>
+48c0: <mark>0b31 b5cd 58d3 f59d c5a9 c583 c4f3</mark> 6f1a
+</code></pre>
+
+<p>If the "ACCESS GRANTED!" string is passed through the Python encryption function using this key, the resulting data should be the unlock password. If the theory is correct, one of the following strings will successfully trigger the unlock interrupt.</p>
+
+<pre><code>&gt;&gt;&gt; ciphertext = encrypt(data[0:16], b"ACCESS GRANTED!\x00")
+&gt;&gt;&gt; binascii.hexlify(ciphertext)
+b'<mark>6e8cbcfc2f4ec33c47c6587da6547e15</mark>'
+&gt;&gt;&gt; ciphertext = encrypt(data[0:24], b"ACCESS GRANTED!\x00")
+&gt;&gt;&gt; binascii.hexlify(ciphertext)
+b'<mark>ab5ee8d8adc30edf8e4bcef8908aade5</mark>'
+&gt;&gt;&gt; ciphertext = encrypt(data[0:32], b"ACCESS GRANTED!\x00")
+&gt;&gt;&gt; binascii.hexlify(ciphertext)
+b'<mark>bb8b973d8b8627ba250fc061ff55faf4</mark>'
+</code></pre>
+
+<p>Unfortunately, all of these inputs have the same result:</p>
+
+<pre><code><xmp>SCAN SECURITY DEVICE
+SCAN SECURITY DEVICE
+SCAN SECURITY DEVICE
+</xmp></code></pre>
+
+<p>Execution does not reach the code that triggers the unlock interrupt.</p>
+
+<h3>Identifying the Search Space</h3>
+
+<p>Assuming this is a standard AES implementation, there are far too many possible function argument combinations to test manually. The implementation may pass the data at address <code>0x48ae</code> as a key or a message. If it is a key, it is unclear whether the key is 16, 24, or 32 bytes long, and it is not clear whether it is at a 16-byte offset within that blob of data.</p>
+
+<pre><code>&gt;&gt;&gt; key_sizes = [16, 24, 32]
+&gt;&gt;&gt; data_length = 432
+&gt;&gt;&gt; combinations = 0
+&gt;&gt;&gt; for size in key_sizes:
+...     combinations += data_length-size
+... 
+&gt;&gt;&gt; combinations
+<mark>1224</mark>
+</code></pre>
+
+<p>On top of this, the data might be a series of little-endian 16-bit integers (which might require swapping every second byte before passing the key to the Python implementation), and the function name might not be accurate (i.e., it is decrypting rather than encrypting). Assuming the message might be 16, 24, or 32 bytes long, the number of possible combinations is as follows:</p>
+
+<pre><code>&gt;&gt;&gt; combinations*(2**3)
+<mark>9792</mark>
+</code></pre>
+
+<p>Automating the generation of all possible combinations is possible, but this would still require manual data entry. Crudely instrumenting the system would be feasible by wrapping a local emulator with something like pwntools. Older emulators written for this system should still work because there are no new undocumented interrupt calls.</p>
+
+
+
+<p>The problem with that approach is that it assumes the AES implementation is standard. Given that this entire system relies on security through obscurity, the developers tweaking the cryptographic implementation<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">I.e., flipping a few bits in the SBOX or changing the number of round keys.</span>
+
+is not out of the question. It is worth understanding the possible low-level alterations before automating the search.</p>
+
+<h2>AES Background</h2>
+
+<p>There are a few good references for understanding how AES works. <a href="https://en.wikipedia.org/wiki/Advanced_Encryption_Standard">Wikipedia</a> is generally a good place to start for a high-level overview. There is also a <a href="https://medium.com/wearesinch/building-aes-128-from-the-ground-up-with-python-8122af44ebf9">writeup</a> by Henrique Marcomini detailing a Python implementation of AES-128, which is helpful for comprehension of how the algorithm works at a low level.</p>
+
+<p>There are several things to note. From Wikipedia:</p>
+
+      <blockquote>
+The key size used for an AES cipher specifies the number of transformation rounds that convert the input, called the plaintext, into the final output, called the ciphertext. The number of rounds is as follows:
+
+<ul>
+	<li>10 rounds for 128-bit keys.</li>
+	<li>12 rounds for 192-bit keys.</li>
+	<li>14 rounds for 256-bit keys.</li>
+</ul>
+	</blockquote>
+
+<p>Wikipedia also has the following high-level description of the algorithm:</p>
+
+	<ol>
+		<li>KeyExpansion – round keys are derived from the cipher key using the AES key schedule. AES requires a separate 128-bit round key block for each round plus one more.</li>
+		<li>Initial round key addition:</li>
+		<ol>
+			<li>AddRoundKey – each byte of the state is combined with a byte of the round key using bitwise xor.</li>
+		</ol>
+	<li>9, 11 or 13 rounds:</li>
+	<ol>
+		<li>SubBytes – a non-linear substitution step where each byte is replaced with another according to a lookup table.</li>
+		<li>ShiftRows – a transposition step where the last three rows of the state are shifted cyclically a certain number of steps.</li>
+		<li>MixColumns – a linear mixing operation which operates on the columns of the state, combining the four bytes in each column.</li>
+		<li>AddRoundKey
+	</ol>
+	<li>Final round (making 10, 12 or 14 rounds in total):</li>
+	<ol>
+		<li>SubBytes</li>
+        	<li>ShiftRows</li>
+        	<li>AddRoundKey</li>
+		</ol>
+	</ol>
+
+<h2>Static Analysis</h2>
+<p>The flow control graph for the <code>aes_ecb_decrypt</code> function is as follows:</p>
+<br>
+      <figure>
+        <img src="./images/baku-aes-ecb-decrypt-flow-control.png"
+		  loading="lazy" alt="Flow control graph for the aes_ecb_decrypt function."/>
+      </figure>
+
+      <p>One pattern to observe in the raw disassembly is the calls to the <code>aesdec128</code> function, of which there are nine. The decompilation below has these calls highlighted.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+      <br>
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">The Ghidra decompiler has problems correctly inferring function signatures on the MSP430 ISA. Decompilation should be assumed to be far less accurate than usual on this ISA.</span>
+
+<br>
+      <figure>
+        <img src="./images/baku-aes-ecb-decrypt-decompilation.png"
+		  loading="lazy" alt="Flow control graph for the aes_ecb_decrypt function."/>
+      </figure>
+
+      <p>There is also a call to the <code>xor128</code> function just before that, which resembles the "initial round key addition" step.</p>
+
+<br>
+      <figure>
+        <img src="./images/baku-aes-ecb-decrypt-first-xor128.png"
+		  loading="lazy" alt="aes_ecb_decrypt: last xor128 call"/>
+      </figure>
+
+      <p>The "final round" step is not the same as the others because another iteration of AddRoundKey follows it, which implies that there should be another <code>xor128</code> call near the end of the function. That call is present on line 40, suggesting that the code from lines 18 to 40 constitutes the final round, bringing the total to ten.</p>
+
+<br>
+      <figure>
+        <img src="./images/baku-aes-ecb-decrypt-last-xor128.png"
+		  loading="lazy" alt="aes_ecb_decrypt: last xor128 call"/>
+      </figure>
+
+      <p>The presence of ten rounds suggests that the implementation uses 128-bit keys.</p>
+
+<h3>Identifying Non-Standard Implementation Details</h3>
+
+<p>The implementation seems to be standard based on superficial code flow, which suggests a change in part of the algorithm that would not be visible based on looking at disassembly—for instance, a global variable. The logical candidate for this would be an SBOX.</p>
+
+<p>The writeup by Henrique Marcomini includes a Python array for both the SBOX and the reverse SBOX.</p>
+
+<pre><code>aes_sbox = [
+    [int('63', 16), int('7c', 16), int('77', 16), int('7b', 16), int('f2', 16), int('6b', 16), int('6f', 16), int('c5', 16), int(
+        '30', 16), int('01', 16), int('67', 16), int('2b', 16), int('fe', 16), int('d7', 16), int('ab', 16), int('76', 16)],
+    [int('ca', 16), int('82', 16), int('c9', 16), int('7d', 16), int('fa', 16), int('59', 16), int('47', 16), int('f0', 16), int(
+        'ad', 16), int('d4', 16), int('a2', 16), int('af', 16), int('9c', 16), int('a4', 16), int('72', 16), int('c0', 16)],
+    [int('b7', 16), int('fd', 16), int('93', 16), int('26', 16), int('36', 16), int('3f', 16), int('f7', 16), int('cc', 16), int(
+        '34', 16), int('a5', 16), int('e5', 16), int('f1', 16), int('71', 16), int('d8', 16), int('31', 16), int('15', 16)],
+    [int('04', 16), int('c7', 16), int('23', 16), int('c3', 16), int('18', 16), int('96', 16), int('05', 16), int('9a', 16), int(
+        '07', 16), int('12', 16), int('80', 16), int('e2', 16), int('eb', 16), int('27', 16), int('b2', 16), int('75', 16)],
+    [int('09', 16), int('83', 16), int('2c', 16), int('1a', 16), int('1b', 16), int('6e', 16), int('5a', 16), int('a0', 16), int(
+        '52', 16), int('3b', 16), int('d6', 16), int('b3', 16), int('29', 16), int('e3', 16), int('2f', 16), int('84', 16)],
+    [int('53', 16), int('d1', 16), int('00', 16), int('ed', 16), int('20', 16), int('fc', 16), int('b1', 16), int('5b', 16), int(
+        '6a', 16), int('cb', 16), int('be', 16), int('39', 16), int('4a', 16), int('4c', 16), int('58', 16), int('cf', 16)],
+    [int('d0', 16), int('ef', 16), int('aa', 16), int('fb', 16), int('43', 16), int('4d', 16), int('33', 16), int('85', 16), int(
+        '45', 16), int('f9', 16), int('02', 16), int('7f', 16), int('50', 16), int('3c', 16), int('9f', 16), int('a8', 16)],
+    [int('51', 16), int('a3', 16), int('40', 16), int('8f', 16), int('92', 16), int('9d', 16), int('38', 16), int('f5', 16), int(
+        'bc', 16), int('b6', 16), int('da', 16), int('21', 16), int('10', 16), int('ff', 16), int('f3', 16), int('d2', 16)],
+    [int('cd', 16), int('0c', 16), int('13', 16), int('ec', 16), int('5f', 16), int('97', 16), int('44', 16), int('17', 16), int(
+        'c4', 16), int('a7', 16), int('7e', 16), int('3d', 16), int('64', 16), int('5d', 16), int('19', 16), int('73', 16)],
+    [int('60', 16), int('81', 16), int('4f', 16), int('dc', 16), int('22', 16), int('2a', 16), int('90', 16), int('88', 16), int(
+        '46', 16), int('ee', 16), int('b8', 16), int('14', 16), int('de', 16), int('5e', 16), int('0b', 16), int('db', 16)],
+    [int('e0', 16), int('32', 16), int('3a', 16), int('0a', 16), int('49', 16), int('06', 16), int('24', 16), int('5c', 16), int(
+        'c2', 16), int('d3', 16), int('ac', 16), int('62', 16), int('91', 16), int('95', 16), int('e4', 16), int('79', 16)],
+    [int('e7', 16), int('c8', 16), int('37', 16), int('6d', 16), int('8d', 16), int('d5', 16), int('4e', 16), int('a9', 16), int(
+        '6c', 16), int('56', 16), int('f4', 16), int('ea', 16), int('65', 16), int('7a', 16), int('ae', 16), int('08', 16)],
+    [int('ba', 16), int('78', 16), int('25', 16), int('2e', 16), int('1c', 16), int('a6', 16), int('b4', 16), int('c6', 16), int(
+        'e8', 16), int('dd', 16), int('74', 16), int('1f', 16), int('4b', 16), int('bd', 16), int('8b', 16), int('8a', 16)],
+    [int('70', 16), int('3e', 16), int('b5', 16), int('66', 16), int('48', 16), int('03', 16), int('f6', 16), int('0e', 16), int(
+        '61', 16), int('35', 16), int('57', 16), int('b9', 16), int('86', 16), int('c1', 16), int('1d', 16), int('9e', 16)],
+    [int('e1', 16), int('f8', 16), int('98', 16), int('11', 16), int('69', 16), int('d9', 16), int('8e', 16), int('94', 16), int(
+        '9b', 16), int('1e', 16), int('87', 16), int('e9', 16), int('ce', 16), int('55', 16), int('28', 16), int('df', 16)],
+    [int('8c', 16), int('a1', 16), int('89', 16), int('0d', 16), int('bf', 16), int('e6', 16), int('42', 16), int('68', 16), int(
+        '41', 16), int('99', 16), int('2d', 16), int('0f', 16), int('b0', 16), int('54', 16), int('bb', 16), int('16', 16)]
+]
+
+reverse_aes_sbox = [
+    [int('52', 16), int('09', 16), int('6a', 16), int('d5', 16), int('30', 16), int('36', 16), int('a5', 16), int('38', 16), int(
+        'bf', 16), int('40', 16), int('a3', 16), int('9e', 16), int('81', 16), int('f3', 16), int('d7', 16), int('fb', 16)],
+    [int('7c', 16), int('e3', 16), int('39', 16), int('82', 16), int('9b', 16), int('2f', 16), int('ff', 16), int('87', 16), int(
+        '34', 16), int('8e', 16), int('43', 16), int('44', 16), int('c4', 16), int('de', 16), int('e9', 16), int('cb', 16)],
+    [int('54', 16), int('7b', 16), int('94', 16), int('32', 16), int('a6', 16), int('c2', 16), int('23', 16), int('3d', 16), int(
+        'ee', 16), int('4c', 16), int('95', 16), int('0b', 16), int('42', 16), int('fa', 16), int('c3', 16), int('4e', 16)],
+    [int('08', 16), int('2e', 16), int('a1', 16), int('66', 16), int('28', 16), int('d9', 16), int('24', 16), int('b2', 16), int(
+        '76', 16), int('5b', 16), int('a2', 16), int('49', 16), int('6d', 16), int('8b', 16), int('d1', 16), int('25', 16)],
+    [int('72', 16), int('f8', 16), int('f6', 16), int('64', 16), int('86', 16), int('68', 16), int('98', 16), int('16', 16), int(
+        'd4', 16), int('a4', 16), int('5c', 16), int('cc', 16), int('5d', 16), int('65', 16), int('b6', 16), int('92', 16)],
+    [int('6c', 16), int('70', 16), int('48', 16), int('50', 16), int('fd', 16), int('ed', 16), int('b9', 16), int('da', 16), int(
+        '5e', 16), int('15', 16), int('46', 16), int('57', 16), int('a7', 16), int('8d', 16), int('9d', 16), int('84', 16)],
+    [int('90', 16), int('d8', 16), int('ab', 16), int('00', 16), int('8c', 16), int('bc', 16), int('d3', 16), int('0a', 16), int(
+        'f7', 16), int('e4', 16), int('58', 16), int('05', 16), int('b8', 16), int('b3', 16), int('45', 16), int('06', 16)],
+    [int('d0', 16), int('2c', 16), int('1e', 16), int('8f', 16), int('ca', 16), int('3f', 16), int('0f', 16), int('02', 16), int(
+        'c1', 16), int('af', 16), int('bd', 16), int('03', 16), int('01', 16), int('13', 16), int('8a', 16), int('6b', 16)],
+    [int('3a', 16), int('91', 16), int('11', 16), int('41', 16), int('4f', 16), int('67', 16), int('dc', 16), int('ea', 16), int(
+        '97', 16), int('f2', 16), int('cf', 16), int('ce', 16), int('f0', 16), int('b4', 16), int('e6', 16), int('73', 16)],
+    [int('96', 16), int('ac', 16), int('74', 16), int('22', 16), int('e7', 16), int('ad', 16), int('35', 16), int('85', 16), int(
+        'e2', 16), int('f9', 16), int('37', 16), int('e8', 16), int('1c', 16), int('75', 16), int('df', 16), int('6e', 16)],
+    [int('47', 16), int('f1', 16), int('1a', 16), int('71', 16), int('1d', 16), int('29', 16), int('c5', 16), int('89', 16), int(
+        '6f', 16), int('b7', 16), int('62', 16), int('0e', 16), int('aa', 16), int('18', 16), int('be', 16), int('1b', 16)],
+    [int('fc', 16), int('56', 16), int('3e', 16), int('4b', 16), int('c6', 16), int('d2', 16), int('79', 16), int('20', 16), int(
+        '9a', 16), int('db', 16), int('c0', 16), int('fe', 16), int('78', 16), int('cd', 16), int('5a', 16), int('f4', 16)],
+    [int('1f', 16), int('dd', 16), int('a8', 16), int('33', 16), int('88', 16), int('07', 16), int('c7', 16), int('31', 16), int(
+        'b1', 16), int('12', 16), int('10', 16), int('59', 16), int('27', 16), int('80', 16), int('ec', 16), int('5f', 16)],
+    [int('60', 16), int('51', 16), int('7f', 16), int('a9', 16), int('19', 16), int('b5', 16), int('4a', 16), int('0d', 16), int(
+        '2d', 16), int('e5', 16), int('7a', 16), int('9f', 16), int('93', 16), int('c9', 16), int('9c', 16), int('ef', 16)],
+    [int('a0', 16), int('e0', 16), int('3b', 16), int('4d', 16), int('ae', 16), int('2a', 16), int('f5', 16), int('b0', 16), int(
+        'c8', 16), int('eb', 16), int('bb', 16), int('3c', 16), int('83', 16), int('53', 16), int('99', 16), int('61', 16)],
+    [int('17', 16), int('2b', 16), int('04', 16), int('7e', 16), int('ba', 16), int('77', 16), int('d6', 16), int('26', 16), int(
+        'e1', 16), int('69', 16), int('14', 16), int('63', 16), int('55', 16), int('21', 16), int('0c', 16), int('7d', 16)]
+]
+</code></pre>
+
+<p>After converting this to raw bytes, one possibility is to search memory for matching data. This objective is achievable by stepping until the call to <code>aes_ecb_decrypt</code>, downloading a memory snapshot at that stage in execution, reading it into a giant Python bytestring, and using the "find" method to locate substrings that match either the regular or reverse SBOX. A constrained search of only the data from address <code>0x48ae</code> is also possible. The code below implements the latter option.</p>
+
+
+<pre><code><xmp>r = []
+for x in reverse_aes_sbox:
+    for i in x:
+        r.append(i)
+g = b''
+for i in [x.to_bytes(1, "big") for x in r]:
+    g += i
+print(data.find(g))
+
+
+r = []
+for x in aes_sbox:
+    for i in x:
+        r.append(i)
+g = b''
+for i in [x.to_bytes(1, "big") for x in r]:
+    g += i
+print(data.find(g))
+</xmp></code></pre>
+
+<p>The <code>aes_sbox</code> and <code>reverse_aes_sbox</code> variables are taken verbatim from the Marcomini writeup. The <code>data</code> variable was defined previously as a bytestring containing the data from address <code>0x48ae</code>. Running this code produces the following output:</p>
+
+<pre><code><xmp>$ python3 sbox_search.py 
+176
+-1
+</xmp></code></pre>
+
+<p>This output indicates that the script located the reverse SBOX starting at the 176th byte from the beginning of the data blob at address <code>0x48ae</code>. The regular SBOX is not present.</p>
+
+<pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 7f78
+48b0: 75e0 c977 d30c e85e ca19 d022 11f7 4b53
+48c0: 0b31 b5cd 58d3 f59d c5a9 c583 c4f3 6f1a
+48d0: f5bb fe9e 53e2 4050 9d7a 301e 015a 6259
+48e0: a739 9184 a659 bece ce98 704e 9c20 5393
+48f0: 45a8 f3dd 0160 2f4a 68c1 ce80 52b8 7007
+4900: 6c8b a04e 44c8 dc97 69a1 e1ca 3a79 ff47
+4910: b02e d049 2843 7cd9 2d69 3d5d 53d8 d980
+4920: 482f 2f0e 986d ac90 052a 4184 7eb1 7dcd
+4930: 0f8e f68e d042 839e 9d47 ed14 7b9b f213
+4940: 8f14 8b43 dfcc 7510 4d05 6e8a e6dc 7b2f
+4950: 0d18 8af1 fa20 493c d251 f10b bcb5 <mark>5209</mark>
+4960: <mark>6ad5 3036 a538 bf40 a39e 81f3 d7fb 7ce3</mark>
+4970: <mark>3982 9b2f ff87 348e 4344 c4de e9cb 547b</mark>
+4980: <mark>9432 a6c2 233d ee4c 950b 42fa c34e 082e</mark>
+4990: <mark>a166 28d9 24b2 765b a249 6d8b d125 72f8</mark>
+49a0: <mark>f664 8668 9816 d4a4 5ccc 5d65 b692 6c70</mark>
+49b0: <mark>4850 fded b9da 5e15 4657 a78d 9d84 90d8</mark>
+49c0: <mark>ab00 8cbc d30a f7e4 5805 b8b3 4506 d02c</mark>
+49d0: <mark>1e8f ca3f 0f02 c1af bd03 0113 8a6b 3a91</mark>
+49e0: <mark>1141 4f67 dcea 97f2 cfce f0b4 e673 96ac</mark>
+49f0: <mark>7422 e7ad 3585 e2f9 37e8 1c75 df6e 47f1</mark>
+4a00: <mark>1a71 1d29 c589 6fb7 620e aa18 be1b fc56</mark>
+4a10: <mark>3e4b c6d2 7920 9adb c0fe 78cd 5af4 1fdd</mark>
+4a20: <mark>a833 8807 c731 b112 1059 2780 ec5f 6051</mark>
+4a30: <mark>7fa9 19b5 4a0d 2de5 7a9f 93c9 9cef a0e0</mark>
+4a40: <mark>3b4d ae2a f5b0 c8eb bb3c 8353 9961 172b</mark>
+4a50: <mark>047e ba77 d626 e169 1463 5521 0c7d</mark> 0000
+4a60: 0000 0000 0000 0000 0000 0000 0000 0000
+</code></pre>
+
+<p>The solitary reverse SBOX indicates that the algorithm performs AES ECB decryption rather than encryption, reinforcing the conjecture that the implementation is standard and implying that the first 176 bytes contain the key.</p>
+
+<pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 <mark>7f78</mark>
+48b0: <mark>75e0 c977 d30c e85e ca19 d022 11f7 4b53</mark>
+48c0: <mark>0b31 b5cd 58d3 f59d c5a9 c583 c4f3 6f1a</mark>
+48d0: <mark>f5bb fe9e 53e2 4050 9d7a 301e 015a 6259</mark>
+48e0: <mark>a739 9184 a659 bece ce98 704e 9c20 5393</mark>
+48f0: <mark>45a8 f3dd 0160 2f4a 68c1 ce80 52b8 7007</mark>
+4900: <mark>6c8b a04e 44c8 dc97 69a1 e1ca 3a79 ff47</mark>
+4910: <mark>b02e d049 2843 7cd9 2d69 3d5d 53d8 d980</mark>
+4920: <mark>482f 2f0e 986d ac90 052a 4184 7eb1 7dcd</mark>
+4930: <mark>0f8e f68e d042 839e 9d47 ed14 7b9b f213</mark>
+4940: <mark>8f14 8b43 dfcc 7510 4d05 6e8a e6dc 7b2f</mark>
+4950: <mark>0d18 8af1 fa20 493c d251 f10b bcb5</mark> 5209
+4960: 6ad5 3036 a538 bf40 a39e 81f3 d7fb 7ce3
+4970: 3982 9b2f ff87 348e 4344 c4de e9cb 547b
+4980: 9432 a6c2 233d ee4c 950b 42fa c34e 082e
+4990: a166 28d9 24b2 765b a249 6d8b d125 72f8
+49a0: f664 8668 9816 d4a4 5ccc 5d65 b692 6c70
+49b0: 4850 fded b9da 5e15 4657 a78d 9d84 90d8
+49c0: ab00 8cbc d30a f7e4 5805 b8b3 4506 d02c
+49d0: 1e8f ca3f 0f02 c1af bd03 0113 8a6b 3a91
+49e0: 1141 4f67 dcea 97f2 cfce f0b4 e673 96ac
+49f0: 7422 e7ad 3585 e2f9 37e8 1c75 df6e 47f1
+4a00: 1a71 1d29 c589 6fb7 620e aa18 be1b fc56
+4a10: 3e4b c6d2 7920 9adb c0fe 78cd 5af4 1fdd
+4a20: a833 8807 c731 b112 1059 2780 ec5f 6051
+4a30: 7fa9 19b5 4a0d 2de5 7a9f 93c9 9cef a0e0
+4a40: 3b4d ae2a f5b0 c8eb bb3c 8353 9961 172b
+4a50: 047e ba77 d626 e169 1463 5521 0c7d 0000
+4a60: 0000 0000 0000 0000 0000 0000 0000 0000
+</code></pre>
+
+<h3>Key Expansion Omission</h3>
+
+<p>Double checking the Wikipedia overview, a step is notably missing from the aes_ecb_decrypt function: KeyExpansion.</p>
+
+
+      <blockquote>
+	      Round keys are derived from the cipher key using the AES key schedule. AES requires a separate 128-bit round key block for each round plus one more.
+	      <cite>— Wikipedia</cite>
+	</blockquote>
+
+	<p>Assuming there are ten rounds (which seems to be the case), there should be eleven round keys that are 16 bytes long. The total length of an array containing these keys would be 176 bytes—the exact size of the data located before the start of the reverse SBOX. The hypothesis that this data is a round key array is supported by observing the runtime behavior of <code>aes_ecb_decrypt</code>:</p> 
+
+<pre><code>470a: mov	r10, r14
+470c: add	#0x10, r14
+4710: mov	r11, r15
+<mark>4712: call	#0x452c &lt;aesdec128&gt;</mark>
+</code></pre>
+
+<p>Breaking at address <code>0x4712</code> and inspecting the register state yields the following:</p>
+
+<pre><code>pc  4712  sp 43ea  sr 0000  cg 0000
+r04 0000 r05 5a08 r06 0000 r07 0000 
+r08 0000 r09 0000 <mark>r10 48ae</mark> r11 43f0 
+r12 48bd r13 0010 <mark>r14 48be</mark> r15 43f0 
+</code></pre>
+
+<p>The pointer into the round key array (<code>R14</code>) contains address <code>0x48ae</code> at the start and every iteration of <code>aesdec128</code> increments that pointer by 0x10 (decimal 16).</p>
+
+
+<pre><code class='language-ascii-noshadows'>
+        ┌────┬─────────────────────────────┐
+        │4716│mov       r10, r14           │
+ ┌───┐  ├────┼─────────────────────────────┤
+ │PC&sup1;├─►│4718│add       <mark>#0x20</mark>, r14         │
+ └───┘  ├────┼─────────────────────────────┤
+        │471c│mov       r11, r15           │
+        ├────┼─────────────────────────────┤
+        │471e│call      #0x452c &lt;aesdec128&gt;│
+        └────┴─────────────────────────────┘
+
+        ┌────┬───────────────────────────────────────┐
+        │48a0│4343 4553 5320 4752 414e 5445 4400 7f78│
+        ├────┼───────────────────────────────────────┤
+        │48b0│75e0 c977 d30c e85e ca19 d022 11f7 4b53│
+┌────┐  ├────┼───────────────────────────────────────┤
+│R14&sup1;├─►│48c0│0b31 b5cd 58d3 f59d c5a9 c583 c4f3 <mark>6f1a</mark>│
+└────┘  ├────┼───────────────────────────────────────┤
+	│48d0│<mark>f5bb fe9e 53e2 4050 9d7a 301e 015a</mark> 6259│
+        ├────┼───────────────────────────────────────┤
+        │48e0│a739 9184 a659 bece ce98 704e 9c20 5393│
+        ├────┼───────────────────────────────────────┤
+        │48f0│45a8 f3dd 0160 2f4a 68c1 ce80 52b8 7007│
+        ├────┼───────────────────────────────────────┤
+        │4900│6c8b a04e 44c8 dc97 69a1 e1ca 3a79 ff47│
+        ├────┼───────────────────────────────────────┤
+        │4910│b02e d049 2843 7cd9 2d69 3d5d 53d8 d980│
+        ├────┼───────────────────────────────────────┤
+        │4920│482f 2f0e 986d ac90 052a 4184 7eb1 7dcd│
+        ├────┼───────────────────────────────────────┤
+        │4930│0f8e f68e d042 839e 9d47 ed14 7b9b f213│
+        ├────┼───────────────────────────────────────┤
+        │4940│8f14 8b43 dfcc 7510 4d05 6e8a e6dc 7b2f│
+        ├────┼───────────────────────────────────────┤
+        │4950│0d18 8af1 fa20 493c d251 f10b bcb5 5209│
+        └────┴───────────────────────────────────────┘
+</code></pre>
+
+
+<pre><code class='language-ascii-noshadows'>
+        ┌────┬─────────────────────────────┐
+        │4722│mov       r10, r14           │
+ ┌───┐  ├────┼─────────────────────────────┤
+ │PC&sup2;├─►│4724│add       <mark>#0x30</mark>, r14         │
+ └───┘  ├────┼─────────────────────────────┤
+        │4728│mov       r11, r15           │
+        ├────┼─────────────────────────────┤
+        │472a│call      #0x452c &lt;aesdec128&gt;│
+        └────┴─────────────────────────────┘
+
+        ┌────┬───────────────────────────────────────┐
+        │48a0│4343 4553 5320 4752 414e 5445 4400 7f78│
+        ├────┼───────────────────────────────────────┤
+        │48b0│75e0 c977 d30c e85e ca19 d022 11f7 4b53│
+        ├────┼───────────────────────────────────────┤
+        │48c0│0b31 b5cd 58d3 f59d c5a9 c583 c4f3 6f1a│
+┌────┐  ├────┼───────────────────────────────────────┤
+│R14&sup2;├─►│48d0│f5bb fe9e 53e2 4050 9d7a 301e 015a <mark>6259</mark>│
+└────┘  ├────┼───────────────────────────────────────┤
+	│48e0│<mark>a739 9184 a659 bece ce98 704e 9c20</mark> 5393│
+        ├────┼───────────────────────────────────────┤
+        │48f0│45a8 f3dd 0160 2f4a 68c1 ce80 52b8 7007│
+        ├────┼───────────────────────────────────────┤
+        │4900│6c8b a04e 44c8 dc97 69a1 e1ca 3a79 ff47│
+        ├────┼───────────────────────────────────────┤
+        │4910│b02e d049 2843 7cd9 2d69 3d5d 53d8 d980│
+        ├────┼───────────────────────────────────────┤
+        │4920│482f 2f0e 986d ac90 052a 4184 7eb1 7dcd│
+        ├────┼───────────────────────────────────────┤
+        │4930│0f8e f68e d042 839e 9d47 ed14 7b9b f213│
+        ├────┼───────────────────────────────────────┤
+        │4940│8f14 8b43 dfcc 7510 4d05 6e8a e6dc 7b2f│
+        ├────┼───────────────────────────────────────┤
+        │4950│0d18 8af1 fa20 493c d251 f10b bcb5 5209│
+        └────┴───────────────────────────────────────┘
+</code></pre>
+
+<pre><code class='language-ascii-noshadows'>
+        ┌────┬─────────────────────────────┐
+        │472e│mov       r10, r14           │
+ ┌───┐  ├────┼─────────────────────────────┤
+ │PC&sup3;├─►│4730│add       <mark>#0x40</mark>, r14         │
+ └───┘  ├────┼─────────────────────────────┤
+        │4734│mov       r11, r15           │
+        ├────┼─────────────────────────────┤
+        │4736│call      #0x452c &lt;aesdec128&gt;│
+        └────┴─────────────────────────────┘
+
+        ┌────┬───────────────────────────────────────┐
+        │48a0│4343 4553 5320 4752 414e 5445 4400 7f78│
+        ├────┼───────────────────────────────────────┤
+        │48b0│75e0 c977 d30c e85e ca19 d022 11f7 4b53│
+        ├────┼───────────────────────────────────────┤
+        │48c0│0b31 b5cd 58d3 f59d c5a9 c583 c4f3 6f1a│
+        ├────┼───────────────────────────────────────┤
+        │48d0│f5bb fe9e 53e2 4050 9d7a 301e 015a 6259│
+┌────┐  ├────┼───────────────────────────────────────┤
+│R14&sup3;├─►│48e0│a739 9184 a659 bece ce98 704e 9c20 <mark>5393</mark>│
+└────┘  ├────┼───────────────────────────────────────┤
+	│48f0│<mark>45a8 f3dd 0160 2f4a 68c1 ce80 52b8</mark> 7007│
+        ├────┼───────────────────────────────────────┤
+        │4900│6c8b a04e 44c8 dc97 69a1 e1ca 3a79 ff47│
+        ├────┼───────────────────────────────────────┤
+        │4910│b02e d049 2843 7cd9 2d69 3d5d 53d8 d980│
+        ├────┼───────────────────────────────────────┤
+        │4920│482f 2f0e 986d ac90 052a 4184 7eb1 7dcd│
+        ├────┼───────────────────────────────────────┤
+        │4930│0f8e f68e d042 839e 9d47 ed14 7b9b f213│
+        ├────┼───────────────────────────────────────┤
+        │4940│8f14 8b43 dfcc 7510 4d05 6e8a e6dc 7b2f│
+        ├────┼───────────────────────────────────────┤
+        │4950│0d18 8af1 fa20 493c d251 f10b bcb5 5209│
+        └────┴───────────────────────────────────────┘
+</code></pre>
+
+<p>This pattern suggests that each 16-byte chunk is a different round key. Whether as an optimization or a deliberate reverse engineering countermeasure, the developers have hard-coded the array of round keys and skipped the key expansion step entirely.</p>
+
+
+	<p>The next step is determining how to reverse the key expansion process to recover the original key. A third writeup at <a href="https://braincoke.fr/blog/2020/08/the-aes-key-schedule-explained/#aes-key-schedule">this link</a> describes the AES-128 key expansion algorithm.</p> 
+
+      <blockquote>
+	      The cipher key <em>K</em> is actually the first round key: <em>K<sub>0</sub></em> = <em>K</em>.
+	      <br>
+<em>K<sub>0</sub></em> = <em>K</em> is only applicable for AES-128.
+	      <cite>— Braincoke</cite>
+	</blockquote>
+
+	<p>If the implementation is standard, the first round key in the array is the cipher key.</p>
+
+<pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 <mark>7f78</mark>
+48b0: <mark>75e0 c977 d30c e85e ca19 d022 11f7</mark> 4b53
+48c0: 0b31 b5cd 58d3 f59d c5a9 c583 c4f3 6f1a
+48d0: f5bb fe9e 53e2 4050 9d7a 301e 015a 6259
+48e0: a739 9184 a659 bece ce98 704e 9c20 5393
+48f0: 45a8 f3dd 0160 2f4a 68c1 ce80 52b8 7007
+4900: 6c8b a04e 44c8 dc97 69a1 e1ca 3a79 ff47
+4910: b02e d049 2843 7cd9 2d69 3d5d 53d8 d980
+4920: 482f 2f0e 986d ac90 052a 4184 7eb1 7dcd
+4930: 0f8e f68e d042 839e 9d47 ed14 7b9b f213
+4940: 8f14 8b43 dfcc 7510 4d05 6e8a e6dc 7b2f
+4950: 0d18 8af1 fa20 493c d251 f10b bcb5 5209
+4960: 6ad5 3036 a538 bf40 a39e 81f3 d7fb 7ce3
+4970: 3982 9b2f ff87 348e 4344 c4de e9cb 547b
+4980: 9432 a6c2 233d ee4c 950b 42fa c34e 082e
+4990: a166 28d9 24b2 765b a249 6d8b d125 72f8
+49a0: f664 8668 9816 d4a4 5ccc 5d65 b692 6c70
+49b0: 4850 fded b9da 5e15 4657 a78d 9d84 90d8
+49c0: ab00 8cbc d30a f7e4 5805 b8b3 4506 d02c
+49d0: 1e8f ca3f 0f02 c1af bd03 0113 8a6b 3a91
+49e0: 1141 4f67 dcea 97f2 cfce f0b4 e673 96ac
+49f0: 7422 e7ad 3585 e2f9 37e8 1c75 df6e 47f1
+4a00: 1a71 1d29 c589 6fb7 620e aa18 be1b fc56
+4a10: 3e4b c6d2 7920 9adb c0fe 78cd 5af4 1fdd
+4a20: a833 8807 c731 b112 1059 2780 ec5f 6051
+4a30: 7fa9 19b5 4a0d 2de5 7a9f 93c9 9cef a0e0
+4a40: 3b4d ae2a f5b0 c8eb bb3c 8353 9961 172b
+4a50: 047e ba77 d626 e169 1463 5521 0c7d 0000
+4a60: 0000 0000 0000 0000 0000 0000 0000 0000
+</code></pre>
+<p>Proceeding from the assumption that this implementation is AES-128 (rather than AES-192 or AES-256), that begs the question: if the first 16-byte round key in the 176-byte array is the encryption key itself, why did the previous attack fail when attempting to use that key?</p>
+
+<pre><code>&gt;&gt;&gt; ciphertext = encrypt(data[<mark>0:16</mark>], b"ACCESS GRANTED!\x00")
+&gt;&gt;&gt; binascii.hexlify(ciphertext)
+b'<mark>6e8cbcfc2f4ec33c47c6587da6547e15</mark>'
+</code></pre>
+
+<p>Encrypting the string <code>"ACCESS GRANTED!"</code> with the first 16-byte key in the array and supplying it at the I/O console should trigger the unlock interrupt.</p>
+
+<p>I/O console output:</p>
+<pre><code><xmp>SCAN SECURITY DEVICE
+</xmp></code></pre>
+
+<p>The unlock is not triggered, disproving that theory.</p>
+
+	<h3>Reversible Algorithms</h3>
+
+	<p>For a reversible algorithm to function, it must be possible to take the output and run it through the algorithm "backward" to produce the original input. The AES encryption algorithm starts at the first round key and iterates through the array until it reaches the last. Even without knowing precisely how this works, the equivalent <em>decryption</em> algorithm must logically start at the final round key and iterate successively backward until it reaches the first. The implication is that a hard-coded round key array for an AES decryption algorithm reverses the element order. Thus, the last round key used by the decryption algorithm must be the original encryption key. If there are eleven 16-byte round keys for AES-128, the last one will start 160 bytes into the array and will be the last element in memory before the start of the SBOX.</p>
+
+<pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 7f78
+48b0: 75e0 c977 d30c e85e ca19 d022 11f7 4b53
+48c0: 0b31 b5cd 58d3 f59d c5a9 c583 c4f3 6f1a
+48d0: f5bb fe9e 53e2 4050 9d7a 301e 015a 6259
+48e0: a739 9184 a659 bece ce98 704e 9c20 5393
+48f0: 45a8 f3dd 0160 2f4a 68c1 ce80 52b8 7007
+4900: 6c8b a04e 44c8 dc97 69a1 e1ca 3a79 ff47
+4910: b02e d049 2843 7cd9 2d69 3d5d 53d8 d980
+4920: 482f 2f0e 986d ac90 052a 4184 7eb1 7dcd
+4930: 0f8e f68e d042 839e 9d47 ed14 7b9b f213
+4940: 8f14 8b43 dfcc 7510 4d05 6e8a e6dc <mark>7b2f</mark>
+4950: <mark>0d18 8af1 fa20 493c d251 f10b bcb5</mark> 5209
+4960: 6ad5 3036 a538 bf40 a39e 81f3 d7fb 7ce3
+4970: 3982 9b2f ff87 348e 4344 c4de e9cb 547b
+4980: 9432 a6c2 233d ee4c 950b 42fa c34e 082e
+4990: a166 28d9 24b2 765b a249 6d8b d125 72f8
+49a0: f664 8668 9816 d4a4 5ccc 5d65 b692 6c70
+49b0: 4850 fded b9da 5e15 4657 a78d 9d84 90d8
+49c0: ab00 8cbc d30a f7e4 5805 b8b3 4506 d02c
+49d0: 1e8f ca3f 0f02 c1af bd03 0113 8a6b 3a91
+49e0: 1141 4f67 dcea 97f2 cfce f0b4 e673 96ac
+49f0: 7422 e7ad 3585 e2f9 37e8 1c75 df6e 47f1
+4a00: 1a71 1d29 c589 6fb7 620e aa18 be1b fc56
+4a10: 3e4b c6d2 7920 9adb c0fe 78cd 5af4 1fdd
+4a20: a833 8807 c731 b112 1059 2780 ec5f 6051
+4a30: 7fa9 19b5 4a0d 2de5 7a9f 93c9 9cef a0e0
+4a40: 3b4d ae2a f5b0 c8eb bb3c 8353 9961 172b
+4a50: 047e ba77 d626 e169 1463 5521 0c7d 0000
+4a60: 0000 0000 0000 0000 0000 0000 0000 0000
+</code></pre>
+
+<p>Testing this theory can be accomplished with the following code in the Python REPL:</p>
+
+
+<pre><code><xmp>>>> binascii.hexlify(encrypt(data[160:176], b"ACCESS GRANTED!\x00"))
+b'aaf7e3ad17bcfd3240422d65fe3ea1b7'
+</xmp></code></pre>
+
+<p>Providing the resulting hex string at the program prompt results in successful authentication and an unlock interrupt call. The final payload, sans quotes, is as follows:</p>
+
+<pre><code>aaf7e3ad17bcfd3240422d65fe3ea1b7
+</code></pre>
+
+<pre><code>Door Unlocked
+The CPU completed in 24284 cycles.</code></pre>
+
+<h2>Remediation</h2>
+
+<p>The core problem is that the developers used encryption when they should have used hashing. The Adobe breach is a famous example of this flaw. It is common in many systems, but there are two frequent variations:</p>
+
+<h5>1. Authentication.</h5>
+
+<p>Hardcoded symmetric encryption keys are insecure credentials for this variety of authentication. As demonstrated above, anyone can extract the key from firmware and reverse the operation to derive the original password. Conventional hashing algorithms or key derivation functions (KDFs) are significantly more secure alternatives, and—in both cases—passwords should also be unique per device.</p>
+
+<h5>2. Encryption at rest.</h5>
+
+<p>A common practice (in some circles) is using AES with hardcoded keys for "encryption at rest." The implementation often uses a global key to decrypt persistent data on every run. Anyone capable of acquiring the compiled binary can extract the key and decrypt this data with relatively little effort.</p>
+
+<p>Hashing and KDFs work well if the implementation uses unique credentials per system, but offline password brute-forcing is still a risk if the data is of sufficient value (e.g., PII or secondary global secrets). There are two potential ways to solve this problem:</p>
+
+<ol>
+	<li>Cloud-based authentication.</li>
+	<li>Hardware-backed authentication.</li>
+</ol>
+
+    <p>Both options enable rate limiting, lockouts, and programmatic key destruction if necessary, which prevents an attacker from employing offline brute-forcing.</p>
+
+</body></html>

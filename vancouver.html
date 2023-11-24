@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html><head>
+    <title>Vancouver — James Every</title>
+    <link rel="shortcut icon" type="image/jpg" href="./images/favicon/glider.ico"/>
+
+    <meta charset="utf-8">
+    <meta http-equiv="Content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="description"
+        content="The writings and projects of James Every." />
+    <meta property="og:title" content="About" />
+    <meta property="og:url" content="https://jamesevery.com" />
+    <meta property="og:description"
+        content="The writings and projects of James Every." />
+    <meta property="og:type" content="website" />
+
+    <link rel="stylesheet" href="./css/style.min.css" />
+    <style type="text/css">
+    </style>    
+</head>
+
+<body>
+<div>
+
+<body id="top">
+  <header>
+    <h1>
+A Case Study in the Perils of Security Through Obscurity 
+    </h1>
+	    </h2>
+    <p class="author">
+      James Every <br />
+      November 2023
+    </p>
+  </header>
+
+    <div class="abstract">
+      <h2>Abstract</h2>
+      <p>
+      This page is a walkthrough for <a href="https://microcorruption.com/debugger/Vancouver">Vancouver</a>, the first in a <a href="https://research.nccgroup.com/2022/10/31/check-out-our-new-microcorruption-challenges/">recent</a> <a href="https://microcorruption.com/map">series</a> of reverse engineering challenges from the Embedded Systems division at NCC Group.
+      </p>
+    </div>
+
+    <h2>Overview</h2>
+    <b>First Working Exploit:</b> 1225 UTC, October 29th, 2022
+    <br>
+    <b>Blockchain Timestamp:</b> 1256 UTC, October 29th, 2022
+    <br>
+    <b>Pastebin Timestamp:</b>
+    <a href="https://pastebin.com/SztaHWT5">pastebin.com/SztaHWT5</a>
+    <br>
+    <b><a href="https://opentimestamps.org">Cryptographic Proof of Existence</a>:</b> <a href="./solutions/vancouver.zip">solution.zip</a>
+    <br>
+    <b>Solve Count At Time Of Writing:</b> 224
+    <br>
+    <b>Solves Per Month:</b> 17.5
+    <br>
+    <b>Reading Time:</b> 9 minutes
+
+
+    <p>The following is a walkthrough for the first in the new series of Microcorruption challenges. The original CTF-turned-wargame was developed a decade ago by Matasano and centered around a deliberately vulnerable smart lock. The goal for each challenge was simple: write a software exploit to trigger an unlock.</p>
+
+    <p>NCC Group later acquired Matasano. They continued maintaining the wargame and added half a dozen new challenges on October 28<sup>th</sup>, 2022. The following walkthroughs document how to exploit them.</p>
+
+    <h3>System Architecture</h3>
+
+The emulated device runs on the MSP430 instruction set architecture. It uses a 16-bit little-endian processor and has 64 kilobytes of RAM. The <a href="https://microcorruption.com/public/manual.pdf">official manual</a> includes the details, but relevant functionality is summarized below.
+
+    <h3>Interface</h3>
+    <p>Several separate windows control the debugger functionality. All subsequent challenges in this series use this interface.</p>
+
+    <br>
+      <figure>
+        <img src="./images/gui.png"
+          loading="lazy" alt="Debugger GUI." />
+      </figure>
+
+      <p>The following user input prompt is the device's external communication interface.</p>
+      <br>
+      <figure>
+        <img src="./images/getsn-popup.png"
+          loading="lazy" alt="Popup triggered by getsn interrupt." />
+      </figure>
+
+    <h3>Overview of the Unlock Interrupt</h3>
+    <p>Triggering an unlock requires a specific interrupt: <code>0x7F</code>. The assembly to implement this call is as follows:</p>
+
+
+    <pre><code><xmp>3012 7f00      push	#0x7f
+b012 a844      call	#0x44a8 <INT></xmp></code></pre>
+
+    <p>The above shellcode passes the <code>0x7F</code> value to the <code>INT</code> function. The disassembly for this function is as follows:</p>
+
+<pre><code><xmp>44a8 <INT>
+44a8:  1f41 0200      mov	0x2(sp), r15
+44ac:  0212           push	sr
+44ae:  4f4f           mov.b	r15, r15
+44b0:  8f10           swpb	r15
+44b2:  3fd0 0080      bis	#0x8000, r15
+44b6:  024f           mov	r15, sr
+44b8:  b012 1000      call	#0x10
+44bc:  3241           pop	sr
+44be:  3041           ret
+</xmp></code></pre>
+
+
+<p>The <code>INT</code> function is a wrapper around the interrupt callgate at address <code>0x10</code>. It is responsible for taking the interrupt number, massaging it into the correct format, and masking it onto the high 8 bits of the status register (<code>SR</code>) before calling address <code>0x10</code>. This call triggers the hardware-specific behavior associated with a given interrupt (e.g., reading input, printing output, or physically retracting the deadbolt). When triggered successfully, the unlock interrupt will cause the following popup to appear.</p>
+
+<br>
+      <figure>
+        <img src="./images/solve-popup.png"
+          loading="lazy" alt="Solve popup." />
+      </figure>
+
+
+<h3>A Brief Note on Shellcode Optimization</h3>
+<p>It is relatively simple to copy the assembly that pushes the <code>0x7F</code> value to the stack and calls the <code>INT</code> function, but this will not work across firmware versions because the absolute address of the <code>INT</code> function will most likely change. Given that every walkthrough in this series uses some variation of this code, it is preferable to have a portable version.</p>
+
+<p>The <code>INT</code> function uses a series of bitwise operations to convert the passed interrupt number into the format expected by the interrupt callgate.</p>
+
+<br>
+      <figure>
+        <img src="./images/vancouver-int-state-1.png"
+          loading="lazy" alt="State before the call to 0x10." />
+      </figure>
+
+<p>When passing <code>0x7F</code>, the register state before the call to address <code>0x10</code> is as follows:</p>
+
+<pre><code>pc  44b8  sp 43f8  sr <mark>ff00</mark>  cg 0000
+r04 0000 r05 5a08 r06 0000 r07 0000 
+r08 0000 r09 0000 r10 0008 r11 8000 
+r12 8008 r13 0000 r14 240b r15 ff00 
+
+</code></pre>
+
+<p>In this case, the INT function effectively sets <code>SR</code> to <code>0xFF00</code> before the call to <code>0x10</code>. This same result is achieved by directly moving <code>0xFF00</code> into <code>SR</code> before calling address <code>0x10</code>.</p>
+
+<p>The assembly to do this is as follows:</p>
+
+<pre><code>3240 00ff      mov	#0xff00, sr
+b012 1000      call	#0x10
+</code></pre>
+
+<p>The assembled version of the above shellcode is below.</p>
+
+<pre><code>324000ffb0121000</code></pre>
+
+<p>This code will trigger an unlock. Unless otherwise noted, all walkthroughs in this series ultimately use some variation of this payload.</p>
+    <h2>
+	    Overview of Vancouver
+    </h2>
+
+    <p>This system effectively grants arbitrary code execution to anyone who can understand the format for the debug payload. While this challenge is not particularly interesting individually, it sets the stage for the next ones in the series.</p>
+
+    <p>The example payload provided in the challenge manual is as follows:</p>
+
+<pre><code class="asm">8000023041</code></pre>
+
+<p>The following message is printed to the I/O console after the system executes the example payload:</p>
+
+<pre><code>Welcome to the test program loader.
+Please enter debug payload.
+Executing debug payload
+</code></pre>
+
+      <h2>Static Analysis</h2>
+      <p>The first goal is to determine how the payload parsing logic works. The flow control graph for the main function is as follows:</p>
+      <br>
+	
+
+      <figure>
+        <img src="./images/vancouver-flow-control.png"
+          loading="lazy" alt="Ghidra flow control graph for the main function." />
+      </figure>
+
+      <p>Observing the string printed by each conditional block allows the deduction of its purpose.</p>
+
+      <br>
+      <table>
+        <caption>Defined Strings</caption>
+        <thead>
+          <tr>
+            <th>String Address</th>
+            <th>String</th>
+            <th>Address of Conditional Block Containing Referencing Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+	  	<td>457a</td>
+	  	<td>"Welcome to the test program loader."</td>
+	  	<td>443e</td>
+	  </tr>
+
+          <tr>
+	  	<td>459e</td>
+	  	<td>"Please enter debug payload."</td>
+	  	<td>4446</td>
+          </tr>
+          <tr>
+	  	<td>45ba</td>
+	  	<td>"Invalid payload length"</td>
+	  	<td>447c</td>
+          </tr>
+          <tr>
+	  	<td>45d1</td>
+	  	<td>"Executing debug payload"</td>
+	  	<td>4486</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>By way of example: <code>"Please enter debug payload"</code> is printed when execution reaches the conditional block labeled <code>4446</code> in the Ghidra graph.<label for="sn-2" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-2" class="sidenote-toggle" />
+<span class="sidenote">Note that the third column in this table is the address of the conditional block where some code references the string, not the exact XREF or the address of the <code>puts</code> call.</span></p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/vancouver-block-4446.png"
+          loading="lazy" alt="Conditional block 4446." />
+      </figure>
+      <hr>
+
+      <h4>Input Buffer Address</h4>
+
+      <p>Before commencing a more detailed analysis, it is necessary to note for future reference that the debug payload is read via a call to the <code>getsn</code> function and stored at address <code>0x2400</code>.</p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/vancouver-getsn.png"
+          loading="lazy" alt="Getsn parameters." />
+      </figure>
+      <hr>
+
+      <h4>Control Flow Transfers</h4>
+      <p>The payload executes soon after the I/O console prints the <code>"Executing debug payload"</code> string, so the conditional block beginning at address <code>0x4486</code> is worth scrutinizing. As expected, the <code>puts</code> call at <code>0x448a</code> is followed several instructions later by an indirect register call.</p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/vancouver-register-indirect-call.png"
+          loading="lazy" alt="Register indirect call." />
+      </figure>
+      <hr>
+
+      <p>Register indirect calls are typically used when the address of the given function is not known at compile time (e.g., for just-in-time compilation). The debug payload may not use a constant load address, requiring reading that address into a register before branching to it after parsing the payload. Achieving successful arbitrary code execution first requires reaching that instruction.</p>
+
+<h4>Path to Code Execution</h4>
+
+<p>Whether the code reaches the above instruction is determined by the conditional jump highlighted in light green below:</p>
+
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/vancouver-conditional-jump.png"
+          loading="lazy" alt="Conditional jump." />
+      </figure>
+      <hr>
+
+<p>The code initially sets the value of <code>R10</code> as follows.</p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/vancouver-size-field-parsing-step.png"
+          loading="lazy" alt="Size field parsing step." />
+      </figure>
+      <hr>
+
+<p>The code sets the value of <code>R10</code> to the byte at address <code>0x2402</code>. This value is the third byte of the user-supplied debug payload:</p>
+
+<pre><code>8000<mark>02</mark>3041</code></pre>
+
+<p>The failing conditional branch prints the <code>"Invalid payload length"</code> string to the I/O console.</p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/vancouver-failing-branch.png"
+          loading="lazy" alt="Failing conditional branch." />
+      </figure>
+
+      <p>This byte must represent the payload length, which the check requires to be 0x2 or higher.</p>
+
+<h4>Redirecting Execution Flow</h4>
+
+<p>The next obvious question is where the register indirect call goes. The fact that the code performs a register call indicates that the target address is unknown at compile time, which suggests that the implementation reads it from an external source. The code sets the value of <code>R11</code> via the following instructions:</p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/vancouver-load-address-parsing.png"
+          loading="lazy" alt="Load address parsing." />
+      </figure>
+      <hr>
+
+<p>Based on testing with the provided example payload, the register state after these instructions is as follows:</p>
+
+<pre><code>pc  447a  sp 4400  sr 0003  cg 0000
+r04 0000 r05 5a08 r06 0000 r07 0000 
+r08 0000 r09 0000 r10 0002 <mark>r11 8000</mark> 
+r12 2800 r13 0000 r14 03ff r15 0000 
+</code></pre>
+
+<p>The value stored in <code>R11</code> (after manipulations to correct the endianness) is the first two bytes of the debug payload. This word is a pointer to the location where execution will branch after the call.</p>
+
+<h3>Results</h3>
+
+<p>Based on the fact that the value stored in <code>R11</code> is interpreted as an address and called, the first two bytes of the payload appear to be the load address for the executable segment.</p>
+
+<pre><code><mark>8000</mark>023041</code></pre>
+
+<p>The third byte is the executable segment size.</p>
+
+<pre><code>8000<mark>02</mark>3041</code></pre>
+
+The last two bytes must be the executable segment contents—in this case, a single two-byte instruction.</p>
+
+<pre><code>800002<mark>3041</mark></code></pre>
+
+<p>Disassembling these bytes produces a valid <code>RET</code> instruction.</p>
+
+<pre><code><mark>3041</mark> ret</code></pre>
+
+<p>The executable section of the payload is copied to the load address via the <code>memcpy</code> function just before the call to <code>R11</code>. The assembly to do this is as follows:
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/vancouver-memcpy-parameters.png"
+          loading="lazy" alt="Memcpy parameters." />
+      </figure>
+      <hr>
+
+<p>Even without knowing the calling convention for memcpy (which is likely the same as any other implementation), it is reasonable to assume that <code>R10</code> is the number of bytes to copy (0x2), 0x2403 is the source location, and <code>R11</code> (which contains 0x8000) is the destination address.</p>
+
+<p>Examining the memory near address 0x8000 after the call to memcpy confirms this.</p>
+
+<pre><code>8000: <mark>3041</mark> 0000 0000 0000 0000 0000 0000 0000   0A..............
+8010: 0000 0000 0000 0000 0000 0000 0000 0000   ................
+8020: *  
+</code></pre>
+
+<h3>Payload format</h3>
+      <table>
+        <caption>Parsing Format</caption>
+        <thead>
+          <tr>
+            <th>Load Address</th>
+            <th>Size (Bytes)</th>
+            <th>Executable code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>8000</code></td>
+		  <td><code>02</code></td>
+		  <td><code>3041 (RET)</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+
+
+<h3 id="tables">Final Exploit</h3>
+<p>Developing a working exploit payload is relatively straightforward: replace the single return instruction with the portable shellcode described earlier and increase the size of the executable segment to match.</p>
+
+      <br>
+
+      <table>
+        <caption>Example Payload Structure</caption>
+        <thead>
+          <tr>
+            <th>Load Address</th>
+            <th>Size (Bytes)</th>
+            <th>Executable code</th>
+            <th>Disassembly</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>8000</code></td>
+		  <td><code>08</code></td>
+		  <td><code>3240 00ff b012 1000</code></td>
+
+		  <td><code>mov #0xff00, sr<br>call #0x10</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+
+
+<pre><code>8000<mark>08</mark>324000ffb0121000</pre></code>
+
+      <p>The final payload increases the size field (highlighted above) from 0x2 to 0x8. Everything following that byte is shellcode.</p>
+
+      <pre><code>Door Unlocked
+The CPU completed in 19639 cycles.
+</code></pre>
+
+      <h2>Alternate Approaches</h2>
+      <p><a href="https://web.archive.org/web/20230824064309/https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-vancouver/">Jaime Lightfoot</a> wrote a post that details the process of creating a working exploit with much less sophisticated analysis. The main difference is that Lightfoot glosses over understanding the size field—instead opting to insert a random byte that happens to work (0x90). The shellcode is also not portable because it wraps the INT function.</p>
+
+<p>The payload is as follows:</p>
+
+      <pre><code>90909030127f00b012a844</code></pre>
+
+      <p>The shellcode disassembly is below. The <code>INT</code> function is at address <code>0x44a8</code> in this particular firmware version.</p>
+
+      <pre><code>3012 7f00      push    #0x7f
+b012 a844      call    #0x44a8
+</code></pre>
+
+      <h2>Remediation</h2>
+      <p>Every challenge in both this and the original series is pedagogically noteworthy for illustrating common flaws in developer logic. It is worthwhile to examine the underlying assumptions of the system architects before discussing technical fixes.</p>
+
+      <p>This system relies on the obscurity of the payload format to prevent an attacker from gaining arbitrary code execution. This "protection" is trivial to circumvent with superficial static analysis or runtime experimentation. While this is a relatively simple example, many commercial systems rely on precisely this type of "countermeasure" to protect intellectual property or prevent attackers from gaining code execution. There are at least two variants of this philosophy.</p>
+
+      <h5><em>Fallacy #1</em>: Compiled languages are "secure" against reverse engineering.</h5>
+      <p>There seems to be an assumption (in some circles) that compiled languages are "secure" because compiled code is more time-consuming to read than source code. Developers looking to hinder reverse engineering efforts prefer languages like C or C++ over C# or Java. While it is possible to obfuscate the latter two by replacing function or variable names with random values, reading the source code and understanding high-level flow control is still a technically viable approach. These developers seem to assume that compiled languages make it harder for an attacker to understand flow control, possibly because they have never used Ghidra and are used to thinking of assembly as a flat, inscrutable list of alien machine instructions devoid of context.</p>
+
+      <p>They will argue that reverse engineering compiled code is time-consuming enough to deter most attackers, and the system is protected by it being too complicated to understand.</p>
+
+      <p>This argument is invalid for two reasons:</p>
+
+      <ol>
+	      <li>Reading assembly is often not as difficult as many people might think—especially when dealing with resource-constrained embedded systems with small codebases. As Jaime Lightfoot's writeup demonstrates, it is possible to reverse engineer this firmware without Ghidra or any other tool. While there are debug symbols in this instance (i.e., function names), nothing prevents an attacker without access to debug symbols from guessing the purpose of functions and renaming them.</li>
+
+	      <li>Decompilers are usually passable at reconstructing the source code (at least insofar as understanding flow control is concerned), eliminating the main theoretical advantage of compilation as a countermeasure.</li>
+      </ol>
+      <p>To illustrate the second point, this is the decompilation of the <code>main</code> function.</p>
+      <br>
+      <figure>
+        <img src="./images/vancouver-main-decompilation.png"
+          loading="lazy" alt="Ghidra decompilation for the main function." />
+      </figure>
+      <br>
+
+
+      <p>This decompilation reconstructs the while loops more or less accurately, and the break statement on line 18 is syntactically correct. This decompilation is still somewhat convoluted because Ghidra has trouble determining the appropriate calling convention on the MSP430 ISA, but this is not typically an issue on ARM or x86. From a reverse engineering standpoint, the gap between compiled "secure" languages<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+      <input type="checkbox" id="sn-1" class="sidenote-toggle" />
+
+<span class="sidenote">
+In this context, "secure language" means convoluted to reverse engineer rather than expensive to exploit. This uncommon use should not be confused with the more common jargon referring to memory safety.
+</span>
+
+and obfuscated Java has closed significantly in the last two decades.</p>
+
+      <p>While it may slow them down slightly, the simple act of compilation does not prevent an attacker from understanding a given codebase. It is possible to introduce various types of code-level obfuscation (e.g., runtime encryption), but even this is not as effective as many developers might assume.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+      <input type="checkbox" id="sn-1" class="sidenote-toggle" />
+
+<span class="sidenote">
+	Incidentally, the original challenge series required circumventing runtime encryption. For more details, see Jaime Lightfoot's write-up on <a href="https://web.archive.org/web/20231101220618/https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-reykjavik/">Reykjavik</a>.
+</span>
+
+      Code-level security through obscurity is not an effective reverse engineering countermeasure—this has been demonstrated time and time again by the failure of software-based anti-piracy solutions across the board.</p>
+
+      <h5><em>Fallacy #2</em>: Protocol obscurity will protect the system.</h5>
+      <p>Once convinced that code-level obfuscation or compilation is ineffective, developers or technical managers will rationalize that security through obscurity only fails if the attackers can access the firmware. Some embedded systems rely on firmware update image encryption, hardware security, or physically restrictive deployment environments to prevent attackers from acquiring a compiled binary to analyze in the first place.</p>
+
+      <p>This tactic is still ineffective for multiple reasons. First, it is possible to intercept a sample payload and reverse engineer the protocol. Even without access to firmware, it is possible to infer that the third byte is a size field by setting it to zero or one and observing the <code>"Invalid payload length"</code> status message at the I/O console. It is also possible to identify intelligible assembly by disassembling the payload at various offsets, which works well if the executable code segment is significantly larger. This approach provides a heuristic for narrowing down where to insert malicious code. Even without access to a firmware blob, black box protocol analysis against this system (and many others) would not require much effort.</p>
+
+      <h3>Patching</h3>
+      <p>Security through obscurity does not work. Instead, use sound cryptographic authentication. Implementing public key-based signature verification for the payload eliminates this class of problem.</p>
+</body></html>

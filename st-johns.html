@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html><head>
+    <title>St. John's — James Every</title>
+    <link rel="shortcut icon" type="image/jpg" href="./images/favicon/glider.ico"/>
+
+    <meta charset="utf-8">
+    <meta http-equiv="Content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="description"
+        content="The writings and projects of James Every." />
+    <meta property="og:title" content="About" />
+    <meta property="og:url" content="https://jamesevery.com" />
+    <meta property="og:description"
+        content="The writings and projects of James Every." />
+    <meta property="og:type" content="website" />
+
+    <link rel="stylesheet" href="./css/style.min.css" />
+    <style type="text/css">
+
+.language-ascii-art {
+ display: inline-block;
+ font-family: "Lucida Console", Monaco, monospace;
+ letter-spacing: -0.2em;
+ line-height: 0.8em;
+ text-shadow: 0 0 5px rgba(100,100,100,0.5);
+}
+
+.language-ascii-noshadows {
+ display: inline-block;
+ letter-spacing: 0em;
+ line-height: 1.16em;
+}
+
+    </style>    
+</head>
+
+<body>
+<div>
+
+<body id="top">
+  <header>
+    <h1>
+	    Binary Russian Roulette: Identifying Leaked Ed25519 Private Keys in Bare Metal Code
+    </h1>
+	    </h2>
+    <p class="author">
+      James Every <br />
+      November 2023
+    </p>
+  </header>
+
+    <div class="abstract">
+      <h2>Abstract</h2>
+
+<p>
+      This page is a walkthrough for <a href="https://microcorruption.com/debugger/St.%20John's">St. John's</a>, the second in a <a href="https://research.nccgroup.com/2022/10/31/check-out-our-new-microcorruption-challenges/">recent</a> <a href="https://microcorruption.com/map">series</a> of reverse engineering challenges from the Embedded Systems division at NCC Group.
+      </p>
+    </div>
+
+    <h2>
+	    Overview
+    </h2>
+    <b>First Working Exploit:</b> 0326 UTC, February 14th, 2023
+    <br>
+    <b>Blockchain Timestamp:</b> 0526 UTC, February 14th, 2023
+    <br>
+    <b>Pastebin Timestamp:</b>
+    <a href="https://pastebin.com/RDdgZe4t">pastebin.com/RDdgZe4t</a>
+    <br>
+    <b><a href="https://opentimestamps.org">Cryptographic Proof of Existence</a>:</b> <a href="./solutions/st-johns/solution.txt">solution.txt</a> <a href="./solutions/st-johns/solution.txt.ots">solution.txt.ots</a>
+    <br>
+    <b>Solve Count At Time Of Writing:</b> 53
+    <br>
+    <b>Solves Per month:</b> 4.14
+    <br>
+    <b>Reading Time:</b> 14 minutes
+
+
+
+    <h2>Background</h2>
+    <p>This write-up, and the two following ones in the series, involve exploiting flaws in glorified secure boot implementations.</p>
+    <blockquote>
+	    [These] levels will let you discover and exploit some bootloader-based vulnerabilities we have discovered in the past.
+	    <cite>— NCC Group</cite>
+	    </blockquote>
+    <p>The debug payload is conceptually similar to a signed bootloader payload, so having context about how secure boot works is helpful.</p>
+    <h3>TPM Based Secure Boot Implementation on x86</h3>
+
+    <p>Consider the x86 secure boot implementation for the sake of reference. <a href="https://en.wikipedia.org/wiki/UEFI#SECURE-BOOT">Wikipedia</a> provides a decent overview, but low-level implementation details are left vague. Specific implementations enforce secure boot through several mechanisms, but x86 platforms usually use a <a href="https://en.wikipedia.org/wiki/Trusted_Platform_Module#Platform_integrity">TPM</a>. The following graph explains this process:</p>
+
+    <br>
+      <figure>
+        <img src="./images/tpm.png"
+          loading="lazy" alt="TPM based Secure Boot implementation on an x86 PC." />
+      </figure>
+      <p>A typical hardware TPM is a physical chip on the motherboard that is hardened against relatively sophisticated hardware attacks and connected to the processor via a low-speed bus. The BIOS boot block is located in a ROM chip and is physically impossible to alter via a software attack. This chip contains the first code that runs after turning on the system. As a simplified explanation, the BIOS boot block code will take a cryptographic checksum of the BIOS code (the section executed next) and send the resulting hash to the TPM. If the hash for the BIOS code does not match the one saved in the TPM, it will respond with a message informing the BIOS boot block that it should halt the boot process. This challenge-response protocol prevents attackers from modifying the BIOS code to insert malicious functionality.</p>
+
+<p>The BIOS code executes, provided its checksum is on the TPM's whitelist. It then takes a checksum of the OS bootloader, sends it to the TPM, and the cycle repeats.</p>
+
+<p>Each code block is responsible for taking a checksum of the next one and sending it to the TPM for verification, forming a "chain of trust" that can prove no malicious alteration of the boot code occurred. This process only works if the "root of trust" (i.e., the BIOS boot block) is practically impossible to alter and if there are no firmware vulnerabilities in subsequent stages.</p>
+
+      <br>
+      <figure>
+        <img src="./images/tpm-note.png"
+          loading="lazy" alt="TPM based Secure Boot implementation on an x86 PC (with annotation)" />
+      </figure>
+
+      <p>A reasonable assumption is that the "debug payload" is somewhat analogous to a kernel, and the goal is to replace it with a malicious version that circumvents the platform integrity checks implemented in the functionality that is analogous to an OS bootloader (the challenge firmware). Alternately, it might be one layer back (i.e., the firmware is similar to a BIOS, and the debug payload is the OS bootloader). Either way, these challenges involve exploiting a vulnerability in the previous stage to break the chain of trust.</p>
+    <h2>
+	    Overview of St. John's
+    </h2>
+
+    <p>This version implements ed25519-based signature verification for any code provided as a debug payload.</p>
+
+    <p>The example payload format is as follows:</p>
+
+<pre><code class="asm">800000063041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708
+</code></pre>
+
+<p>Running the <code>continue</code> command in the debugger with no breakpoints produces the following output at the I/O console:</p>
+
+
+<pre><code class="asm">Welcome to the secure program loader.
+Please enter debug payload.
+</code></pre>
+
+<h2>High-Level Analysis</h2>
+
+<p>The first several bytes of the debug payload are similar to Vancouver.</p>
+
+<pre><code><mark>800000063041</mark>f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<p>The first two bytes are 0x8000 (big-endian). These bytes are identical to the load address from Vancouver, so it is reasonable to assume they serve the same purpose here.</p>
+
+<pre><code><mark>8000</mark>00063041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<p>Similarly to Vancouver, there is also a distinguishable <code>RET</code> instruction (0x3041), which is likely part of the executable code segment.</p>
+
+<pre><code>80000006<mark>3041</mark>f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<p>A low, single-byte value (0x6) precedes the RET instruction—most likely the executable segment size.</p>
+
+<pre><code>800000<mark>06</mark>3041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<p>This hypothesis is supported by inspecting the following disassembly from the main function:</p>
+
+    <br>
+<hr>
+      <figure>
+        <img src="./images/st-johns-size-parsing.png"
+          loading="lazy" alt="Load address parsing logic." />
+      </figure>
+      <hr>
+
+<p>Aside from the change to the getsn destination address, this is almost identical to the equivalent section from Vancouver. The above code interprets the 0x6 value as a byte rather than a word—exactly how the previous firmware version parsed the size field.</p>
+
+<p>There is a null byte of unknown import preceding the size field. It is not immediately apparent what this byte does.</p>
+
+<pre><code>8000<mark>00</mark>063041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<p>Because the first obvious instruction is a RET, execution does not reach any subsequent code. The implication is that all of the following data is a digital signature.</p>
+
+<pre><code>800000063041<mark>f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</mark></code></pre>
+
+<p>Executing the above example payload will print the following message to the console:</p>
+
+<pre><code>Signature valid, executing payload</code></pre>
+
+<p>Breaking at address <code>0x8000</code> shortly after the <code>getsn</code> function call and continuing confirms that execution reaches the <code>RET</code> instruction at address <code>0x8000</code>.</p>
+
+<br>
+      <figure>
+        <img src="./images/st-johns-execution-reaches-8000.png"
+          loading="lazy" alt="St. John's main function flow control graph." />
+      </figure>
+
+<p>Much like in Vancouver, the sample debug payload will immediately return, and the <code>main</code> function will loop. The inferred payload structure is thus as follows:</p>
+
+<br>
+      <table>
+        <caption>Parsing Format</caption>
+        <thead>
+          <tr>
+            <th>Load Address</th>
+            <th>Unknown</th>
+            <th>Size (Bytes)</th>
+            <th>Executable code</th>
+            <th>Signature</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>8000</code></td>
+		  <td><code>00</code></td>
+		  <td><code>06</code></td>
+		  <td><code>3041 (RET)</code></td>
+		  <td><code>f23630084d78f18b0...</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>Unintended Instructions</h4>
+<p>Interestingly, the executable segment size is too large. This results in four bytes of the signature<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">Ascertaining where the executable code ends and the signature begins is difficult because of this error. It becomes obvious why the demarcation is at this offset after understanding how large an ed25519 signature must be.</span>
+
+
+being copied and appended to the end of the executable code.</p>
+
+<pre><code>8000: 3041 <mark>f236 3008</mark> 0000 0000 0000 0000 0000   0A.60...........
+8010: 0000 0000 0000 0000 0000 0000 0000 0000   ................
+</code></pre>
+
+<p>This bug could theoretically allow the interpretation of the signature bytes as code. These extra bytes disassemble into the following instructions:</p>
+<br>
+
+      <table>
+        <caption>Executable Code in Debug Payload</caption>
+        <thead>
+          <tr>
+            <th>Opcode</th>
+            <th>Disassembly</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>f236</code></td>
+		  <td><code>jge $-0x21a</code></td>
+          </tr>
+          <tr>
+		  <td><code>3008</code></td>
+		  <td><code>(Invalid instruction)</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>This strange behavior is worth noting, but it is not immediately useful. Using the <code>JGE</code> instruction as a ROP gadget is theoretically possible, but that would first require redirecting the execution flow. Normal execution never reaches that conditional jump because the program executes the <code>RET</code> instruction first.</p>
+
+
+<h2>Signature Verification Testing</h2>
+<p>The first step is to ensure that signature verification works properly and understand which parts of the payload are signed, accomplished by flipping bits in each of the four documented fields.</p>
+
+<pre><code><mark>90</mark>0000063041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<pre><code>800000<mark>08</mark>3041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<pre><code>80000006<mark>40</mark>41f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<pre><code>800000063041<mark>ff</mark>3630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<p>Changing the first byte of the load address, size, executable code, or the signature will fail with the following error:</p> 
+
+<pre><code>Incorrect signature, continuing
+Please enter debug payload.
+</pre></code>
+
+<p>Based on this, it is reasonable to assume the entire payload is signed and thus unalterable, suggesting that there is either a vulnerability in the ed25519 implementation, a logic flaw that allows for bypassing signature verification, or a memory safety issue that is exploitable using only the signed payload.</p>
+
+<p>The disassembly for the <code>verify_ed25519</code> function is as follows:</p>
+
+<pre><code>4552 &lt;verify_ed25519&gt;
+4552:  push	r11
+4554:  push	r4
+4556:  mov	sp, r4
+4558:  add	#0x4, r4
+455a:  decd	sp
+455c:  clr	-0x6(r4)
+4560:  mov	#0xfffa, r11
+4564:  add	r4, r11
+4566:  push	r11
+4568:  push	r12
+456a:  push	r13
+456c:  push	r14
+456e:  push	r15
+4570:  <mark>push	#0x33</mark>
+4574:  call	#0x4504 &lt;INT&gt;
+4578:  mov	-0x6(r4), r15
+457c:  add	#0xe, sp
+4580:  pop	r4
+4582:  pop	r11
+4584:  ret
+</code></pre>
+
+<p>The code in this function suggests that ed25519 signature verification on this platform uses a custom, undocumented hardware interrupt: 0x33. Even if there was a vulnerability in the ed25519 implementation, there is no way to analyze it directly.</p>
+
+<h2>Static Analysis</h2>
+
+<p>The static analysis process can begin after downloading a memory snapshot via the debugger interface, importing the binary into Ghidra, disassembling from the entrypoint at 0x4400, and renaming functions.</p>
+
+<p>The following is the Ghidra function graph (flow control) for the <code>main</code> function:</p>
+
+<br>
+      <figure>
+        <img src="./images/st-johns-flow-control.png"
+          loading="lazy" alt="St. John's main function flow control graph." />
+      </figure>
+
+      <p>The program prints various status messages by calling <code>puts</code>. Examining the string that each conditional block prints allows for conjecture about its purpose.</p>
+      <br>
+      <table>
+        <caption>Defined Strings</caption>
+        <thead>
+          <tr>
+            <th>String Address</th>
+            <th>String</th>
+	    <th>Address of Conditional Block Containing Referencing Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td>4640</td>
+		  <td>"Welcome to the secure program loader."</td>
+		  <td>443e</td>
+          </tr>
+          <tr>
+		  <td>4666</td>
+		  <td>"Please enter debug payload."</td>
+		  <td>444a</td>
+          </tr>
+          <tr>
+		  <td>4682</td>
+		  <td>"Load address outside allowed range of 0x8000-0xF000"</td>
+	          <td>4486</td>
+          </tr>
+          <tr>
+		  <td>46b6</td>
+		  <td>"Load address unaligned"</td>
+	          <td>4494</td>
+          </tr>
+          <tr>
+		  <td>46cd</td>
+		  <td>"Invalid payload length"</td>
+	          <td>44aa</td>
+          </tr>
+          <tr>
+		  <td>46e4</td>
+		  <td>"Incorrect signature, continuing"</td>
+		  <td>44d8</td>
+          </tr>
+          <tr>
+		  <td>4704</td>
+		  <td>"Signature valid, executing payload"</td>
+		  <td>44e2</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Most of the status messages are early termination conditions for the main loop. It is worth experimentally verifying that all of these work as designed.</p>
+
+
+<pre><code><mark>70</mark>0000063041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<pre><code>Load address outside allowed range of 0x8000-0xF000</code></pre>
+
+<pre><code><mark>f2</mark>0000063041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<pre><code>Load address outside allowed range of 0x8000-0xF000</code></pre>
+
+<pre><code>80<mark>01</mark>00063041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<pre><code>Load address unaligned</code></pre>
+
+<pre><code>800000<mark>01</mark>3041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<pre><code>Invalid payload length</code></pre>
+
+<p>All of these checks seem to work correctly. It is worth noting that the incorrect size field is due to a conditional jump in block 449e, which prevents it from being set below six.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+Convert the size integer (at address 0x44a0) to a signed 16-bit integer in the Ghidra display for easier readability.
+</span></p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/st-johns-incorrect-size.png"
+          loading="lazy" alt="Size field check in main function." />
+      </figure>
+<hr>
+
+<p>Because the code is short (2 bytes), this causes copying of a chunk of the signature along with it. It is also worth noting that the third byte in the payload seems to be completely unused.</p>
+
+<pre><code>8000<mark>00</mark>063041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<p>Observing the lack of XREFs to that specific memory location confirms this fact.</p>
+
+      <figure>
+        <img src="./images/st-johns-unknown-byte-xrefs.png"
+          loading="lazy" alt="Size field check in main function." />
+      </figure>
+
+      <h3>Attack Surface Analysis</h3>
+
+<p>There is no obvious way to bypass the signature verification check. There are only nulls in the <code>0x8000-0xF000</code> range, which seems to rule out memory corruption as a viable option and suggest the existence of a flaw in the logic surrounding the ed25519 implementation. In order to exploit such a flaw, it is necessary to understand the calling convention and parameters for a generic ed25519 signature verification function.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+ Because this algorithm is somewhat similar to DSA, a naive approach would be to assume the algorithm was misused (i.e., reused nonces were left littered in the firmware). However, this is impossible with ed25519 because it uses a digest of the message as a nonce.
+</span>
+</p>
+
+<h2>Calling Convention for ed25519</h2>
+
+<p>A good starting point is the Wikipedia article on <a href="https://en.wikipedia.org/wiki/EdDSA#Performance">EdDSA</a>, which has a section devoted to ed25519. It includes basic information about cryptographic key sizes: public keys are 256 bits (32 bytes) long, and signatures are 512 bits (64 bytes) long. The data at the end of the debug payload (after the two-byte <code>RET</code> instruction) is exactly 64 bytes long, which suggests that it is a signature.</p>
+
+<p>Another reference is the <a href="https://www.cryptopp.com/wiki/Ed25519">wiki page</a> for the Crypto++ library, which includes an example of one potential calling convention. First, the code loads public keys from persistent storage:</p>
+
+<pre><code><xmp>FileSource fs2("public.key.bin", true);
+ed25519::Verifier verifier;
+verifier.AccessPublicKey().Load(fs2);
+
+valid = verifier.GetPublicKey().Validate(prng, 3);
+if (valid == false)
+    throw std::runtime_error("Invalid public key");
+
+std::cout << "Keys are valid" << std::endl;
+</xmp></code></pre>
+
+<p>Message verification then takes pointers to the message and signature, along with sizes for both:</p>
+
+<pre><code><xmp>valid = verifier.VerifyMessage((const byte*)&message[0], message.size(),
+                               (const byte*)&signature[0], signature.size());
+
+if (valid == false)
+    throw std::runtime_error("Invalid signature over message");
+std::cout << "Verified signature over message\n" << std::endl;
+</xmp></code></pre>
+
+<p>The above example implementation suggests that a generic function for verifying ed25519 signatures takes the following parameters:</p>
+
+<ul>
+	<li>Public key (32 bytes)</li>
+	<li>Message</li>
+	<li>Message size</li>
+	<li>Signature</li>
+	<li>Signature size</li>
+</ul>
+
+<p>The <code>ed25519_verify</code> function passes arguments in five registers: <code>R11</code> through <code>R15</code>. The number of registers matches the parameter count used by the Crypto++ implementation.</p>
+
+<br>
+      <figure>
+        <img src="./images/st-johns-before-ed25519-call.png"
+          loading="lazy" alt="Before call to ed25519." />
+      </figure>
+
+
+<pre><code>pc  4574  sp 43ac  sr 0001  cg 0000
+r04 43be r05 5a08 r06 0000 r07 0000 
+r08 0000 r09 0000 r10 0006 <mark>r11 43b8</mark> 
+<mark>r12 43c0 r13 0006 r14 2460 r15 2440</mark> 
+</code></pre>
+
+<p>These five registers reference two general blocks of memory: the stack and one just after 0x2400 (probably the data section).</p>
+
+<br>
+      <figure>
+        <img src="./images/st-johns-ed25519-parameters.png"
+          loading="lazy" alt="Parameters for ed25519." />
+      </figure>
+
+<p>Based on the ed25519 Wikipedia description, it is reasonable to assume that <code>R15</code> is a pointer to the public key. This data is exactly 32 bytes, as the 33rd would overlap with the beginning of the debug payload (which is stored just after it in memory). <code>R14</code> contains a pointer to the debug payload (the message). <code>R13</code> is the message size. <code>R12</code> points to the signature (copied to the stack previously).</p>
+
+<pre><code class='language-ascii-noshadows'>┌───────────────────────────────────────────────┐
+│                 DATA SECTION                  │
+├───────┬───────────────────────────────────────┤
+│ADDRESS│                 DATA                  │
+├───────┼───────────────────────────────────────┤
+│  2400 │70c3 679b 4336 5ca0 1131 991c c462 135b│
+├───────┼───────────────────────────────────────┤
+│  2410 │ecae 7df9 73d6 2b16 3c05 c679 746c e52f│
+├───────┼───────────────────────────────────────┤
+│  2420 │0821 8d19 996d 174f 147f 157b 9f2c 8011│
+├───────┼───────────────────────────────────────┤
+│  2430 │4ab3 d2d1 2532 d2ea b925 6161 46a8 15be│
+├───────┼───────────────────────────────────────┤  ┌───┬──────────┐
+│  2440 │<mark>0821 8d19 996d 174f 147f 157b 9f2c 8011</mark>│◄─┤R15│PUBLIC KEY│
+├───────┼───────────────────────────────────────┤  └───┴──────────┘
+│  2450 │<mark>4ab3 d2d1 2532 d2ea b925 6161 46a8 15be</mark>│
+├───────┼───────────────────────────────────────┤  ┌───┬───────┐
+│  2460 │<u>8000 0006 3041</u> f236 3008 4d78 f18b 0ef3│◄─┤R14│<u>MESSAGE</u>│
+├───────┼───────────────────────────────────────┤  └───┴───────┘
+│  2470 │6969 3ebd b5ea f129 0b3c b4a6 9815 345a│
+├───────┼───────────────────────────────────────┤  ┌───┬────────────┐
+│  2480 │0de5 3b9b b6cc 7de3 c461 59a7 af7c 91c2│  │R13│MESSAGE SIZE│
+├───────┼───────────────────────────────────────┤  ├───┴────────────┤
+│  2490 │8a3d 3691 3098 2229 0d9c 6482 fefc 03cb│  │      0006      │
+├───────┼───────────────────────────────────────┤  └────────────────┘
+│  24a0 │bcff 35ce 9708 0000 0000 0000 0000 0000│
+├───────┼───────────────────────────────────────┤
+│  24b0 │0000 0000 0000 0000 0000 0000 0000 0000│
+└───────┴───────────────────────────────────────┘
+
+┌───────────────────────────────────────────────┐
+│                     STACK                     │
+├───────┬───────────────────────────────────────┤
+│ADDRESS│                 DATA                  │
+├───────┼───────────────────────────────────────┤  ┌───┐
+│  43b0 │6024 0600 c043 b843 <mark>0000</mark> 0000 0080 d444│◄─┤R11│
+├───────┼───────────────────────────────────────┤  ├───┼─────────┐
+│  43c0 │<mark>f236 3008 4d78 f18b 0ef3 6969 3ebd b5ea</mark>│◄─┤R12│SIGNATURE│
+├───────┼───────────────────────────────────────┤  └───┴─────────┘
+│  43d0 │<mark>f129 0b3c b4a6 9815 345a 0de5 3b9b b6cc</mark>│
+├───────┼───────────────────────────────────────┤
+│  43e0 │<mark>7de3 c461 59a7 af7c 91c2 8a3d 3691 3098</mark>│
+├───────┼───────────────────────────────────────┤
+│  43f0 │<mark>2229 0d9c 6482 fefc 03cb bcff 35ce 9708</mark>│
+└───────┴───────────────────────────────────────┘
+
+
+</code></pre>
+
+
+<p>The stack address <code>R11</code> points to contains a null word. Assuming it is not a pointer, the value is too big to be a size. Given that the Wikipedia page implies that all signatures are 64 bytes, the signature size is likely hardcoded—and thus unnecessary to pass as a parameter.</p>
+
+<p>The word at the memory location pointed to by <code>R11</code> is always zero before the 0x33 interrupt call, but it is set to 0x1 and loaded into <code>R15</code> if signature verification is successful.</p>
+
+
+<pre><code class='language-ascii-noshadows'>┌───────────────────────────────────────────────┐
+│                     STACK                     │
+├───────┬───────────────────────────────────────┤
+│ADDRESS│                 DATA                  │
+├───────┼───────────────────────────────────────┤  ┌───┐
+│  43b0 │6024 0600 c043 b843 <mark>0000</mark> 0000 0080 d444│◄─┤R11│
+└───────┴────────────────────┬──────────────────┘  └───┘
+                             │
+                             ▼ CALL
+                      ┌──────────────┐
+                      │ed25519_verify│
+                      └──────┬───────┘
+                             │
+                             ▼ SUCCESS
+┌───────┬───────────────────────────────────────┐  ┌───┐
+│  43b0 │6024 0600 c043 b843 <mark>0001</mark> 0000 0080 d444│◄─┤R11│
+└───────┴───────────────────────────────────────┘  └───┘
+</code></pre>
+
+<p>Testing using a known invalid payload results in this word remaining zero.</p>
+
+<pre><code class='language-ascii-noshadows'>┌───────────────────────────────────────────────┐
+│                     STACK                     │
+├───────┬───────────────────────────────────────┤
+│ADDRESS│                 DATA                  │
+├───────┼───────────────────────────────────────┤  ┌───┐
+│  43b0 │6024 0600 c043 b843 <mark>0000</mark> 0000 0080 d444│◄─┤R11│
+└───────┴────────────────────┬──────────────────┘  └───┘
+                             │
+                             ▼ CALL
+                      ┌──────────────┐
+                      │ed25519_verify│
+                      └──────┬───────┘
+                             │
+                             ▼ FAILURE
+┌───────┬───────────────────────────────────────┐  ┌───┐
+│  43b0 │6024 0600 c043 b843 <mark>0000</mark> 0000 0080 d444│◄─┤R11│
+└───────┴───────────────────────────────────────┘  └───┘
+</code></pre>
+
+
+
+This pattern suggests that <code>ed25519_verify</code> returns a boolean status code to indicate either success or failure in signature verification.</p>
+
+<p>This behavior is also identifiable by looking at the comparison at <code>0x44d4</code>, where the firmware uses the contents of <code>R15</code> to determine whether to print the <code>"Incorrect signature, continuing"</code> status message.
+<br>
+<hr>
+      <figure>
+        <img src="./images/st-johns-boolean-status-code.png"
+          loading="lazy" alt="Boolean signature verification pass check." />
+      </figure>
+<hr>
+
+<p>The calling convention for this specific implementation of ed25519 is detailed below.</p>
+
+<h3 id="tables">Implementation-Specific Calling Convention</h3>
+      <table>
+	      <caption>Parameters for <code>ed25519_verify</code></caption>
+        <thead>
+          <tr>
+            <th>Register</th>
+            <th>Description</th>
+	    <th>Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td>r11</td>
+		  <td>Status code</td>
+		  <td><code>volatile int *</code></td>
+          </tr>
+          <tr>
+		  <td>r12</td>
+		  <td>Signature</td>
+		  <td><code>void *</code></td>
+          </tr>
+          <tr>
+		  <td>r13</td>
+		  <td>Message size</td>
+		  <td><code>int</code></td>
+          </tr>
+          <tr>
+		  <td>r14</td>
+		  <td>Message</td>
+		  <td><code>void *</code></td>
+          </tr>
+          <tr>
+		  <td>r15</td>
+		  <td>Public key</td>
+		  <td><code>void *</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+
+      <h3>Identifying Key Material Leakage</h3>
+<p>Tampering with the status code returned by <code>ed25519_verify</code> does not seem possible. There is also nothing about the parameters which suggest the implementation is flawed. That said, understanding the calling convention is helpful because it grants insight into the contents of the above memory regions. Nothing resides in the stack memory above the signature location nor in the area below the debug payload. Interestingly, 64 bytes of data above the public key are seemingly unused by the program. Given the proximity of this blob to other data used by <code>ed25519_verify</code>, it is reasonable to suspect that some of it might be a private key.</p>
+
+<pre><code class='language-ascii-noshadows'>┌───────────────────────────────────────────────┐
+│                 DATA SECTION                  │
+├───────┬───────────────────────────────────────┤
+│ADDRESS│                 DATA                  │
+├───────┼───────────────────────────────────────┤  ┌───────────┐
+│  2400 │<mark>70c3 679b 4336 5ca0 1131 991c c462 135b</mark>│◄─┤PRIVATE KEY│
+├───────┼───────────────────────────────────────┤  └───────────┘
+│  2410 │<mark>ecae 7df9 73d6 2b16 3c05 c679 746c e52f</mark>│
+├───────┼───────────────────────────────────────┤
+│  2420 │<mark>0821 8d19 996d 174f 147f 157b 9f2c 8011</mark>│
+├───────┼───────────────────────────────────────┤
+│  2430 │<mark>4ab3 d2d1 2532 d2ea b925 6161 46a8 15be</mark>│
+├───────┼───────────────────────────────────────┤
+│  2440 │0821 8d19 996d 174f 147f 157b 9f2c 8011│
+├───────┼───────────────────────────────────────┤
+│  2450 │4ab3 d2d1 2532 d2ea b925 6161 46a8 15be│
+├───────┼───────────────────────────────────────┤
+│  2460 │8000 0006 3041 f236 3008 4d78 f18b 0ef3│
+├───────┼───────────────────────────────────────┤
+│  2470 │6969 3ebd b5ea f129 0b3c b4a6 9815 345a│
+├───────┼───────────────────────────────────────┤
+│  2480 │0de5 3b9b b6cc 7de3 c461 59a7 af7c 91c2│
+├───────┼───────────────────────────────────────┤
+│  2490 │8a3d 3691 3098 2229 0d9c 6482 fefc 03cb│
+├───────┼───────────────────────────────────────┤
+│  24a0 │bcff 35ce 9708 0000 0000 0000 0000 0000│
+├───────┼───────────────────────────────────────┤
+│  24b0 │0000 0000 0000 0000 0000 0000 0000 0000│
+└───────┴───────────────────────────────────────┘
+</code></pre>
+
+
+      <h2>Malicious Code Signing Attempt</h2>
+
+<p>Verifying this assumption is relatively straightforward:</p>
+
+<ol>
+	<li>Take the payload from Vancouver</li>
+	<li>Insert an extra byte before the size field</li>
+	<li>Sign the whole thing using the suspected private key</li>
+	<li>Append the resulting signature to the end</li>
+	<li>Submit the debug payload</li>
+</ol>
+	<p>If the signing process works<label for="sn-4" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-4" class="sidenote-toggle" />
+<span class="sidenote">I.e., the data is a valid, uncorrupted ed25519 private key.</span>
+
+	and the data format is correct, this should yield arbitrary code execution.</p>
+
+	<p>There are multiple utilities to handle the ed25519 signing. The simplest option is using a site like <a href="https://cyphr.me/ed25519_applet/ed.html">cyphr.me</a>.</p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/cyphr-me.png"
+          loading="lazy" alt="Cyphr.me interface." />
+      </figure>
+<hr>
+
+      <p>Generating a private key using the above site provides an example of the format it expects. Private keys are only 32 bytes, so if the theory is accurate, the key could start at any offset between address <code>0x2400</code> and <code>0x2420</code>. The 32 bytes beginning at <code>0x2400</code> are assumed to be the private key.</p>
+
+<br>
+<hr>
+      <figure>
+        <img src="./images/churchill-cyphr-me-example.png"
+          loading="lazy" alt="Cyphr.me with data." />
+      </figure>
+<hr>
+
+<h3 id="tables">Payload</h3>
+      <table>
+        <caption>Structure</caption>
+        <thead>
+          <tr>
+            <th>Load Address</th>
+	    <th>Unknown</th>
+            <th>Size (Bytes)</th>
+            <th>Executable code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>8000</code></td>
+		  <td><code>00</code></td>
+		  <td><code>08</code></td>
+		  <td><code>3240 00ff b012 1000</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+<p>The raw payload bytes to be signed are as follows:</p>
+
+<pre><code>80000008324000ffb0121000</pre></code>
+
+<p>This data produces<label for="sn-4" class="sidenote-toggle sidenote-number"></label>
+
+the following signature:
+
+<input type="checkbox" id="sn-4" class="sidenote-toggle" />
+<span class="sidenote">Set the "msg encoding" parameter on the cyphr.me site to hex before signing.</span>
+
+</p>
+
+<pre><code>979C15EB87E8F776162CDA6D083D9A3AB0737260C881CB896E589F860D9926449EBE6AC404C3AED9AD631AAA6819F411A29ADE1B74F7F67CE917588715268F01</pre></code>
+
+<p>The final payload is the concatenation of the raw payload and the signature:</p>
+
+<pre><code>80000008324000ffb0121000979C15EB87E8F776162CDA6D083D9A3AB0737260C881CB896E589F860D9926449EBE6AC404C3AED9AD631AAA6819F411A29ADE1B74F7F67CE917588715268F01</pre></code>
+
+<h2>Signature Verification Failure</h2>
+<p>Unfortunately, this does not work, and signature verification fails at runtime.</p>
+
+<pre><code>Welcome to the secure program loader.
+Please enter debug payload.
+Incorrect signature, continuing
+Please enter debug payload.
+</code></pre>
+
+<p>At first glance, the obvious conclusion is that the extracted data is not the private key. One approach would be to try every starting offset between <code>0x2400</code> and <code>0x2420</code> as the private key, but there is a better solution. Unlike DSA, the ed25519 algorithm is deterministic: given the same exact inputs, it should produce the same output. The simplest way to determine whether any given data is the correct private key is to attempt to sign the first eight bytes of the example payload with it and see if the resulting signature matches.</p>
+
+<p>The example payload (sans signature) is as follows:</p>
+
+<pre><code>800000063041</pre></code>
+
+<p>When signed with the 32 bytes of data starting at <code>0x2400</code>, it produces the following signature:
+
+<pre><code>F23630084D78F18B0EF369693EBDB5EAF1290B3CB4A69815345A0DE53B9BB6CC7DE3C46159A7AF7C91C28A3D3691309822290D9C6482FEFC03CBBCFF35CE9708</pre></code>
+
+<p>The above hex string matches the signature in the example payload, confirming that the first 32 bytes at address <code>0x2400</code> are the private key and suggesting an unrelated issue with the final exploit.</p>
+
+<h2>Debugging</h2>
+
+<p>The size field is the glaring difference between the example payload and the new payload containing the shellcode.</p>
+
+<pre><code>800000<mark>06</mark>3041f23630084d78f18b0ef369693ebdb5eaf1290b3cb4a69815345a0de53b9bb6cc7de3c46159a7af7c91c28a3d3691309822290d9c6482fefc03cbbcff35ce9708</code></pre>
+
+<pre><code>800000<mark>08</mark>324000ffb0121000979C15EB87E8F776162CDA6D083D9A3AB0737260C881CB896E589F860D9926449EBE6AC404C3AED9AD631AAA6819F411A29ADE1B74F7F67CE917588715268F01</pre></code>
+
+<p>The example payload size field is 6, which is 4 bytes larger than the length of the executable code section. Six bytes is also the total length of the payload (including the load address, the unknown byte, and the size field). One theory might be that the format changed from Vancouver to St. John's, and the size is now the total length rather than just the length of the executable code section.</p>
+
+<h2>Arbitrary Code Execution</h2>
+
+<p>Adding four to the size field and re-signing produces the following payload:</p>
+
+
+<pre><code>800000<mark>0c</mark>324000ffb0121000483249ADDE744F491DAED26FFC723E08257D2B210A20177B1556C8F04D0D80B861453D737ED08AE10165CDF40B37DA23967A266F605ECFA9490B9C664682EC0B</pre></code>
+
+<p>Providing this payload at the input prompt produces the following output at the I/O console:</p>
+
+<pre><code>Signature valid, executing payload</pre></code>
+
+<p>The payload triggers the unlock interrupt, demonstrating successful arbitrary code execution. Oddly, this still results in four bytes of the signature tacked on to the end of the executable code at address <code>0x8000</code>, which seems to be a bug in the implementation. Regardless, it does not affect the viability of the final attack.</p>
+
+<br>
+      <table>
+        <caption>Final Exploit Structure</caption>
+        <thead>
+          <tr>
+            <th>Load Address</th>
+	    <th>Unknown</th>
+            <th>Size (Bytes)</th>
+            <th>Executable code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+		  <td><code>8000</code></td>
+		  <td><code>00</code></td>
+		  <td><code>0c</code></td>
+		  <td><code>3240 00ff b012 1000</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+<pre><code>Door Unlocked
+The CPU completed in 21663 cycles.
+</code></pre>
+
+      <h2>Remediation</h2>
+
+      <p>Except for the developers leaking the debug payload signing key by embedding it in the firmware, the soundness of the implementation is not in question. The signature verification mechanism works perfectly well and improves on the Vancouver implementation.</p>
+
+      <p>This variety of key leakage is typically more of a bureaucratic than a technical failure.</p>
+      <ol>
+	      <li>Developers should not have access to release signing keys if at all possible.</li>
+	      <li>There should be a dedicated process for signing builds</li>
+	      <li>It should be isolated from the rest of the network (ideally occurring on an air-gapped system)</li>
+	      <li>There should only be specific personnel with access to the signing system</li>
+	      <li>There should be an approval process to verify that release builds use release signing keys</li>
+	</ol>
+
+	<p>A dedicated workstation with disk encryption or an HSM may work as a release signing system. While it may be tempting to blame developers for these problems, the real issue is the lack of security controls in the organization. Developers cannot leak signing keys that they do not have access to in the first place.</p>
+
+</body></html>
