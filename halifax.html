@@ -109,11 +109,8 @@
 
     <h2>Background</h2>
 
-    <h5>General</h5>
 <p>Each challenge is centered around a deliberately vulnerable smart lock. The goal is simple: write a software exploit to trigger an unlock.</p>
 
-<h5>Halifax</h5>
-    <p>While the debug payload is unsigned and achieving arbitrary code execution is trivial, the unlock interrupt is disabled via an undocumented mechanism.</p>
     <h2>System Architecture</h2>
 
     <p>The emulated device runs on the MSP430 instruction set architecture. It uses a 16-bit little-endian processor and has 64 kilobytes of RAM. The <a href="https://microcorruption.com/public/manual.pdf">official manual</a> includes the details, but relevant functionality is summarized below.</p>
@@ -163,6 +160,8 @@ The assembled version of the above shellcode is below.
           loading="lazy" alt="Unlock status message." />
       </figure>
 
+<h2>Overview of Halifax</h2>
+    <p>While the debug payload is unsigned and achieving arbitrary code execution is trivial, the unlock interrupt is disabled via an undocumented mechanism.</p>
 
 
 <h2>High-Level Analysis</h2>
