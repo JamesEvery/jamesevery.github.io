@@ -75,25 +75,18 @@
     <br>
     <b>Reading Time:</b> 45 minutes
 
-<p><b>General Note:</b> There is a known issue with Android not including a true monotype system font, which breaks many of the extended ASCII character set diagrams below. Please view this page on a Chrome or Firefox-based desktop browser to avoid rendering issues.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+    <h5>Rendering Note:</h5>
+<p>There is a known issue with Android not including a true monotype system font, which breaks many of the extended ASCII character set diagrams below. Please view this page on a Chrome or Firefox-based desktop browser to avoid rendering issues.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">
 	Ideally on a Linux host.
 </span>
-
-    <h2>Background</h2>
-
-<p>Each challenge is centered around a deliberately vulnerable smart lock. The goal is simple: write a software exploit to trigger an unlock.</p>
-
-<h5>Halifax</h5>
-    <p>The unlock interrupt is now disabled via an undocumented mechanism. While the debug payload is unsigned and achieving arbitrary code execution is trivial, the portable shellcode—which works on previous firmware versions—can no longer successfully call interrupt <code>0x7F</code>.</p>
-
     <p><b>Author's Note:</b></p>
 
-    <p>At the time of writing, under four dozen people on Earth have written working exploits for the Halifax firmware. The one described herein was the first—completed the same day the challenges were announced.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+    <p>At the time of writing, under four dozen people on Earth have written working exploits for the Halifax firmware. The one described herein was the first—completed the same day the challenges were announced.<label for="sn-2" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-2" class="sidenote-toggle" />
 <span class="sidenote">
 	<b>Challenges Deployed:</b>
     <br>
@@ -113,6 +106,14 @@
 </span>
 </p>
 
+
+    <h2>Background</h2>
+
+    <h5>General</h5>
+<p>Each challenge is centered around a deliberately vulnerable smart lock. The goal is simple: write a software exploit to trigger an unlock.</p>
+
+<h5>Halifax</h5>
+    <p>While the debug payload is unsigned and achieving arbitrary code execution is trivial, the unlock interrupt is disabled via an undocumented mechanism.</p>
     <h2>System Architecture</h2>
 
     <p>The emulated device runs on the MSP430 instruction set architecture. It uses a 16-bit little-endian processor and has 64 kilobytes of RAM. The <a href="https://microcorruption.com/public/manual.pdf">official manual</a> includes the details, but relevant functionality is summarized below.</p>
@@ -163,9 +164,8 @@ The assembled version of the above shellcode is below.
       </figure>
 
 
-<h2>High-Level Analysis</h2>
-<p>With the prelude out of the way, the reverse engineering process begins here.</p>
 
+<h2>High-Level Analysis</h2>
 <h3>Sample Payload</h3>
 <p>The debug payload is relatively short, and the load address is read big-endian. The example payload is below.</p>
 
@@ -235,9 +235,9 @@ Any payload is allowed,  because the unlock key must be passed to the new interr
 
       <h3>Signature Verification</h3>
 
-      <p>The absence of apparent calls to <code>ed25519_verify</code></code><label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+      <p>The absence of apparent calls to <code>ed25519_verify</code></code><label for="sn-3" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
 <span class="sidenote">
 	Signature verification on <a href="./st-johns.html">St. Johns</a>, <a href="./cold-lake.html">Cold Lake</a>, and <a href="churchill.html">Churchill</a> relied on this function.
 </span>
@@ -278,7 +278,7 @@ Please enter debug payload.
 </code></pre>
 
 <h3>Sanity Check</h3>
-<p>The next step is to verify that the unlock interrupt is disabled, which is accomplished by reusing the portable shellcode.</p>
+<p>The next step is to verify that the unlock interrupt is disabled, which is accomplished using the following shellcode.</p>
 
 <h5>Shellcode</h5>
 <pre><code>800008<mark>324000ffb0121000</mark>
@@ -313,9 +313,9 @@ b012 1000      call      #0x10
 <h2>Reverse Engineering Methodology</h2>
 <h3>Similar Systems</h3>
 
-<p>Anyone familiar with the original challenges set will remember that some involved bypassing hardware security modules (HSMs). Detailed writeups for the exploits used to bypass these HSMs <a href="https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-hanoi/">already</a> <a href="https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-whitehorse/">exist</a> elsewhere, but it is worth briefly summarizing how they work because this system may be similar.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>Anyone familiar with the original challenges set will remember that some involved bypassing hardware security modules (HSMs). Detailed writeups for the exploits used to bypass these HSMs <a href="https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-hanoi/">already</a> <a href="https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-whitehorse/">exist</a> elsewhere, but it is worth briefly summarizing how they work because this system may be similar.<label for="sn-4" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-4" class="sidenote-toggle" />
 <span class="sidenote">
 For this section, emphasis is added unless otherwise noted. 
 </span></p>
@@ -328,7 +328,7 @@ For this section, emphasis is added unless otherwise noted.
 <cite>— <a href="https://microcorruption.com/public/manual.pdf">Microcorruption Manual</a></cite>
 </blockquote>
 
-<h5>Case Study: Hanoi</h5>
+<h5>Case Study</h5>
 The <a href="https://microcorruption.com/debugger/Hanoi">Hanoi</a> firmware version employs the HSM Model 1.
 
 
@@ -354,7 +354,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
 <cite>— <a href="https://microcorruption.com/public/manual.pdf">Microcorruption Manual</a></cite>
 </blockquote>
 
-<h5>Case Study: Whitehorse</h5>
+<h5>Case Study</h5>
 <p>The <a href="https://microcorruption.com/debugger/Whitehorse">Whitehorse</a> firmware version employs the HSM Model 2.</p>
 
 <blockquote>
@@ -551,7 +551,7 @@ b012 1000      call	#0x10
 <p>Testing the above payload on Vancouver confirms that the unlock is triggered, but this does not work on Halifax. The call to <code>0x10</code> once again returns without visible effect. With the possibility of re-enabling the interrupt from software eliminated, the only remaining option is black-box analysis of the interface to the secure processor.</p>
 
 <h2>Black Box Analysis</h2>
-<p>For the sake of argument, assume that the logical <code>AND</code> transistor is present moving forward. Before beginning any deep analysis, the first step is understanding the code that makes interrupt calls to the secure processor, which requires a more detailed review of the disassembly and flow control for the <code>main</code> function.</p>
+<p>For the sake of argument, assume that the logical <code>AND</code> transistor is present moving forward. Before beginning any deep analysis, the first step is understanding the code that makes interrupt calls to the secure processor interface, which requires a more detailed review of the disassembly and flow control for the <code>main</code> function.</p>
 
 <h2>Static Analysis</h2>
 <hr>
@@ -690,9 +690,9 @@ unlock by providing the 16 byte key to 0x41 interrupt
 
 
 
-<p>It is possible to execute custom code inside TEEs, but this is not true of the other three categories—which usually only run code written by their respective vendors. The lack of boutique code theoretically means secure elements, HSMs, and TPMs have undergone more intense security testing,<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>It is possible to execute custom code inside TEEs, but this is not true of the other three categories—which usually only run code written by their respective vendors. The lack of boutique code theoretically means secure elements, HSMs, and TPMs have undergone more intense security testing,<label for="sn-5" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-5" class="sidenote-toggle" />
 <span class="sidenote">Of course, this claim is speculative, as it is impossible to determine how much review or testing any proprietary codebase has undergone.</span>
 
  and fixing vulnerabilities is the vendor's responsibility.</p>
@@ -716,7 +716,7 @@ unlock by providing the 16 byte key to 0x41 interrupt
 <h3>SRAM Hash Calculation</h3>
 <p>The obvious target for a memory leak is functionality that already reads data from SRAM. The SRAM hash calculation is a likely candidate.</p>
 
-<p>The <code>sha256_internal</code> function is a wrapper for an 0x41 interrupt call, which implies that the interrupt used to pass the unlock key is the same one used to compute the SRAM hash.</p>
+<p>The <code>sha256_internal</code> function is a wrapper for an <code>0x41</code> interrupt call, which implies that the interrupt used to pass the unlock key is the same one used to compute the SRAM hash.</p>
 
 <pre><code>45b6 &lt;sha256_internal&gt;
 45b6:  0d12           push	r13
@@ -914,7 +914,7 @@ r12 4400 r13 43e0 <mark>r14 1000 r15 0000</mark>
 
 <h5>Known Preimage:</h5>
 
-<p>The sha256 hash of a single null byte can be calculated in Python using the following code.</p>
+<p>A sha256 hash can be calculated in Python using the following code.</p>
 
 <pre><code>python3 -i
 &gt;&gt;&gt; import hashlib
@@ -926,7 +926,7 @@ b'6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d'
 <p>The known hash for a single null byte matches the one printed to the I/O console, confirming that the byte at offset 0x800 in SRAM is 0x00 and that it is possible to checksum individual bytes. The information leak vulnerability exists and is exploitable.</p>
 
 <h5>A note on the workings of hashing algorithms:</h5>
-<p>It may not be immediately clear why this proves it is possible to leak <em>individual byte values</em> rather than words. To illustrate why this is so, consider the following Python code.</p>
+<p>It may not be immediately clear why this proves it is possible to leak individual byte values rather than words. To illustrate why this is so, consider the following Python code.</p>
 
 <pre><code>&gt;&gt;&gt; import hashlib
 &gt;&gt;&gt; import binascii
@@ -940,7 +940,7 @@ b'96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7'
 
 
 <h2>Exploit Weaponization</h2> 
-<p>While it is convenient to single step and manually edit register values to leak individual bytes, a more efficient technique is required to extract the entire contents of SRAM. There is already existing code in memory to call <code>sha256_internal</code> and print the resulting hash to the I/O console.</p>
+<p>While it is convenient to single-step and manually edit register values to leak individual bytes, a more efficient technique is required to extract the entire contents of SRAM. There is already existing code in memory to call <code>sha256_internal</code> and print the resulting hash to the I/O console.</p>
 
 <br>
 <hr>
@@ -1324,9 +1324,9 @@ b'96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7'
       <p>The size field is 255 (0xFF) for convenience, which causes copying of the null memory after the executable code section to the load address along with it. This quirk does not affect the payload code, so it is acceptable.</p>
 <h5>Data section:</h5>
 
-<p>The data section is defined<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>The data section is defined<label for="sn-6" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-6" class="sidenote-toggle" />
 <span class="sidenote">Note that integers are stored little-endian.</span>
 
 as follows:</p>
@@ -1338,11 +1338,13 @@ as follows:</p>
 0000 0000 0000 0000
 0000 0000 0000 0000
 </code></pre>
-<h5>Payload Assembly:</h5>
+<h5>Full Payload:</h5>
+
+<p>Executable instructions are highlighted below.</p>
 
 <pre><code>8000 ff 
 
-183c
+<mark>183c</mark>
 3040 0080 ffff 0010
 0000 0000 0000 0000
 0000 0000 0000 0000
@@ -1350,7 +1352,7 @@ as follows:</p>
 0000 0000 0000 0000
 0000 0000 0000 0000
 
-3440 0280 a244 ee44 2453 a244 f044 
+<mark>3440 0280 a244 ee44 2453 a244 f044 
 
 0d41
 3e40 0100 
@@ -1360,7 +1362,7 @@ as follows:</p>
 1642 0880
 0f96
 0224
-3040 a644
+3040 a644</mark>
 </code></pre>
       <h4>Results</h4>
 
@@ -1645,9 +1647,9 @@ ef5d 0000      add.b	@r13, 0x0(r15)
 <p>These observations support the hypothesis that the external device is a secure element. The rationale for this is as follows.</p>
 
 <ul>
-	<li>"Secure memory" has been<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+	<li>"Secure memory" has been<label for="sn-7" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-7" class="sidenote-toggle" />
 <span class="sidenote">For example, see research by Olivier Hériveaux against the ATECC family of chips (i.e., <a href="https://www.sstic.org/media/SSTIC2020/SSTIC-actes/blackbox_laser_fault_injection_on_a_secure_memory/SSTIC2020-Article-blackbox_laser_fault_injection_on_a_secure_memory-heriveaux.pdf">ATECC508A</a> or <a href="https://www.youtube.com/watch?v=Kj1nVJypXPM">ATECC608B</a>). The term "secure element" may be a somewhat inaccurate description, as the author notes that the ATECC508A may be erroneously marketed as a secure element when it does not have the relevant certifications to meet that standard for security.
 
 <br><br>
@@ -1656,15 +1658,15 @@ Regardless of whether the term "secure element" is accurate for describing the A
 </span>
 
 		used synonymously with "secure element" in other contexts.</li>
-	<li>Secure elements are usually cheaper devices that have less storage than standard TPMs. 4KB is a minuscule quantity of memory for one of these; the usual<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+	<li>Secure elements are usually cheaper devices that have less storage than standard TPMs. 4KB is a minuscule quantity of memory for one of these; the usual<label for="sn-8" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-8" class="sidenote-toggle" />
 <span class="sidenote">For further details, see 7:07 to 11:11 in <a href="https://www.youtube.com/watch?v=LdW1FGUQgFo&t=427s">this video</a>.</span>
 
 			range is 6KB-50KB.</li> 
-	<li>The lack of apparent code in SRAM suggests that it is used only for sensitive data storage. This functionality is consistent with WolfSSL's description<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+	<li>The lack of apparent code in SRAM suggests that it is used only for sensitive data storage. This functionality is consistent with WolfSSL's description<label for="sn-9" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-9" class="sidenote-toggle" />
 <span class="sidenote">A text search for "secure memory" in the WolfSSL <a href="https://www.wolfssl.com/difference-hsm-tpm-secure-enclave-secure-element-hardware-root-trust/">page</a> from earlier locates only one instance of the term. This phrase is found only in the section describing secure elements.</span>
 
 		of the "secure memory" typically offered by secure elements.</li>
@@ -1696,15 +1698,15 @@ Regardless of whether the term "secure element" is accurate for describing the A
 
 <p>The key is relatively large to be passed directly on the stack, so it is reasonable to assume that the secure element takes a pointer.
 
-If <code>sha256_internal</code> passes the start offset and length in <code>SP-0x4</code><label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+If <code>sha256_internal</code> passes the start offset and length in <code>SP-0x4</code><label for="sn-10" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-10" class="sidenote-toggle" />
 <span class="sidenote">The value of <code>R14</code> pushed to the stack.</span>
 and 
 
-<code>SP-0x2</code><label for="sn-2" class="sidenote-toggle sidenote-number"></label>
+<code>SP-0x2</code><label for="sn-11" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-2" class="sidenote-toggle" />
+<input type="checkbox" id="sn-11" class="sidenote-toggle" />
 <span class="sidenote">The value of <code>R15</code> pushed to the stack.</span>
 
 before the call to <code>INT</code>, neither word could store a pointer to the key.</p>
@@ -1896,9 +1898,9 @@ ffaf 00b5 0000 0000
       └────────────────┴────────┴────┴───┴────┘
 </code></pre>
 
-<p>This <code>getsn</code> call will read 0xF000<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>This <code>getsn</code> call will read 0xF000<label for="sn-12" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-12" class="sidenote-toggle" />
 <span class="sidenote">The buffer size for the input is arbitrarily large—convenient but not strictly necessary.</span>
 
 
@@ -2117,9 +2119,9 @@ bytes from user input and write them to address <code>0x9000</code> in the main 
 
 </code></pre>
 
-<p>It is unclear which stack offset should contain the pointer to the key, but it obviously cannot replace the offset or length because that would break the hashing logic. Valid dummy values (0x2) serve as surrogates for these two words. The four words after that are the pointer to the current offset in the shadow buffer. The call should succeed if interrupt <code>0x41</code> interprets one of these words on the stack as a key pointer.</p>
+<p>It is unclear which stack offset should contain the pointer to the key, but it obviously cannot replace the offset or length because that would break the hashing logic. Valid dummy values (0x2) serve as surrogates for these two words. The four words after that contain the pointer to the current offset in the shadow buffer. The call should succeed if interrupt <code>0x41</code> interprets one of these words on the stack as a key pointer.</p>
 
-<p>There must be some mechanism to verify whether the secure enclave accepted the key and unblocked the unlock interrupt, so it is tested by attempting to call the latter.</p> 
+<p>There must be some mechanism to verify whether the secure element accepted the key and unblocked the unlock interrupt, so it is tested by attempting to call the latter.</p> 
 
 <pre><code class='language-ascii-noshadows'>      ┌─────────┬─────────────────────┐
       │3e40 00f0│mov  #0xf000, r14    │
@@ -2167,7 +2169,7 @@ bytes from user input and write them to address <code>0x9000</code> in the main 
 
 </code></pre>
 
-<p>The successful unlock status message should appear if the current key candidate authenticates to the secure enclave.</p>
+<p>The successful unlock status message should appear if the current key candidate authenticates to the secure element.</p>
 
 <p>Lastly, if the unlock interrupt call does not succeed, the last defined word in the data section is compared to the current offset in the shadow buffer.
 
@@ -2369,9 +2371,9 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 	<li>Stripping an additional layer of encoding from the SRAM data is necessary.</li>
 
 	<ul>
-		<li>Unlikely. It might be reasonable to assume the presence of encoding<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+		<li>Unlikely. It might be reasonable to assume the presence of encoding<label for="sn-13" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-13" class="sidenote-toggle" />
 <span class="sidenote">
 Many non-whitespace characters and multiple equal signs might indicate base64, for example.
 </span>
@@ -2394,7 +2396,7 @@ if the extracted data had a consistent format, but the hexdump of the data does 
 
 
 <h3>Strange Behavior</h3>
-<p>This theory is not as far-fetched as it might at first appear. Recall the calling convention for the 0x41 interrupt call. There are only a few stack locations to pass a key pointer.</p>
+<p>This theory is not as far-fetched as it might at first appear. Recall the calling convention for the <code>0x41</code> interrupt call. There are only a few stack locations to pass a key pointer.</p>
 
 <pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
       │                 STACK                  │
@@ -2565,7 +2567,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 <p>This crash indicates that the loop ended without sending a valid key to the correct interrupt.</p>
 
 <h4>Attempt 2</h4>
-<p>The known interrupts have been exhausted. As observed previously, interrupts tend to be grouped by function. The next logical step is to try the entire 0x40-0x4F range—starting with 0x42.</p>
+<p>The known interrupts have been exhausted. As observed previously, interrupts tend to be grouped by function. The next logical step is to try the entire 0x40-0x4F range—starting with <code>0x42</code>.</p>
 
 <h5>Modified payload:</h5>
 <pre><code>0d12           push	r13
@@ -2643,9 +2645,9 @@ b012 5045
 <h2>Conclusion</h2>
 <h3>Bug Reporting</h3>
 
-<p>After completing this challenge, it was worth reaching out to the creators and inquiring (as part of a report about multiple unrelated<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>After completing this challenge, it was worth reaching out to the creators and inquiring (as part of a report about multiple unrelated<label for="sn-14" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-14" class="sidenote-toggle" />
 <span class="sidenote">The new backend brought with it numerous <s>bugs</s> features. Those who thought the original set was too easy will praise the introduction of <em>hard mode</em>—in the form of the <em>new and improved</em> (dis)assembler.</span>
 
 issues) whether the erroneous interrupt number in the manual and status messages was a deliberate attempt at psychological warfare.</p>
@@ -2762,9 +2764,9 @@ Nothing was working, and it didn't seem to even attempt to use our keys. So, we 
 <cite>— John Breaux</cite>
 </blockquote>
 
-<p>This information seemingly<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>This information seemingly<label for="sn-15" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-15" class="sidenote-toggle" />
 <span class="sidenote">
 If any of the challenge authors are reading this page, confirmation would be appreciated.
 </span>
@@ -2869,7 +2871,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 
 <h5>1. Do not execute arbitrary user-supplied payloads on the main MCU.</h5>
 
-<p>A glaring issue remains unexamined: <em>nothing about this architecture requires it to allow arbitrary unsigned code execution on the main MCU</em>. Debug payloads should be signed (as on <a href="./st-johns.html">St. John's</a> or <a href="cold-lake.html">Cold Lake</a>) or eliminated from the implementation altogether.</p>
+<p>A glaring issue remains unexamined: nothing about this architecture requires it to allow arbitrary unsigned code execution on the main MCU. Debug payloads should be signed (as on <a href="./st-johns.html">St. John's</a> or <a href="cold-lake.html">Cold Lake</a>) or eliminated from the implementation altogether.</p>
 
 <p>This mitigation requires attackers to bypass the signature verification mechanism or find another issue that allows them to gain a foothold on the main MCU, adding another layer of defense-in-depth.</p>
 
@@ -2878,9 +2880,9 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 
 <p>The graver vulnerability lies in the (ostensibly third-party) secure element. There is no easy way to audit the backing software implementation. Patching would be the vendor's responsibility, and there may be no firmware update mechanism.</p>
 
-<p>In the best-case scenario, this requires waiting for the third-party vendor to ship out patches. In a worst-case scenario, it is unpatchable, and fixing the vulnerability requires releasing a new generation of hardware.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>In the best-case scenario, this requires waiting for the third-party vendor to ship out patches. In a worst-case scenario, it is unpatchable, and fixing the vulnerability requires releasing a new generation of hardware.<label for="sn-16" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-16" class="sidenote-toggle" />
 <span class="sidenote">
 This risk management "strategy" is a commonplace. 
 </span>
@@ -2889,16 +2891,16 @@ This risk management "strategy" is a commonplace.
 <h3>The Problem With Hardware Security</h3>
 <h5>The Semantics Of Security Through Obscurity</h5>
 
-<p>Secure elements are designed, in part, to protect against hardware attacks. The problem in the hardware security world is that manufacturers tend to conflate two kinds of security through obscurity. There is a credible argument that undocumented hardware countermeasures demonstrably impede attackers. In this sense, the system relies on hardware-level security through obscurity. Disclosing the hardware-level workings<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>Secure elements are designed, in part, to protect against hardware attacks. The problem in the hardware security world is that manufacturers tend to conflate two kinds of security through obscurity. There is a credible argument that undocumented hardware countermeasures demonstrably impede attackers. In this sense, the system relies on hardware-level security through obscurity. Disclosing the hardware-level workings<label for="sn-17" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-17" class="sidenote-toggle" />
 <span class="sidenote">
 	I.e., data sheets or schematics.
 </span>
 
-of the chip would put that protection in jeopardy.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+of the chip would put that protection in jeopardy.<label for="sn-18" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<input type="checkbox" id="sn-18" class="sidenote-toggle" />
 <span class="sidenote">
 This "protection" is a byproduct of the relatively nascent general state of the hardware security field. Falling equipment prices and more accessible education about the subject area will eventually undermine it.
 </span>
