@@ -40,7 +40,7 @@
 <body id="top">
   <header>
     <h1>
-	    Meteorological Opposite of Hell: Secure Element Black Box Firmware Analysis
+	    Meteorological Opposite of Hell: Black Box Analysis and Exploitation of a Secure Element ABI
     </h1>
 	    </h2>
     <p class="author">
@@ -75,7 +75,18 @@
     <br>
     <b>Reading Time:</b> 45 minutes
 
+<p><b>General Note:</b> There is a known issue with Android not including a true monotype system font, which breaks many of the extended ASCII character set diagrams below. Please view this page on a Chrome or Firefox-based desktop browser to avoid rendering issues.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
 
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	Ideally on a Linux host.
+</span>
+
+    <h2>Background</h2>
+
+<p>Each challenge is centered around a deliberately vulnerable smart lock. The goal is simple: write a software exploit to trigger an unlock.</p>
+
+<h5>Halifax</h5>
     <p>The unlock interrupt is now disabled via an undocumented mechanism. While the debug payload is unsigned and achieving arbitrary code execution is trivial, the portable shellcode—which works on previous firmware versions—no longer appears to retract the deadbolt.</p>
 
     <p><b>Author's Note:</b></p>
@@ -102,6 +113,57 @@
 </span>
 </p>
 
+    <h2>System Architecture</h2>
+
+    <p>The emulated device runs on the MSP430 instruction set architecture. It uses a 16-bit little-endian processor and has 64 kilobytes of RAM. The <a href="https://microcorruption.com/public/manual.pdf">official manual</a> includes the details, but relevant functionality is summarized below.</p>
+
+    <h3>Interface</h3>
+    <p>Several separate windows control the debugger functionality.</p>
+
+    <br>
+      <figure>
+        <img src="./images/algiers/algiers-gui.png"
+          loading="eager" alt="Debugger GUI." />
+      </figure>
+
+      <p>A user input prompt like the following is the device's external communication interface.</p>
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-input-prompt.png"
+          loading="lazy" alt="Popup triggered by getsn interrupt." />
+      </figure>
+
+      <h3>Exploit Development Objective</h3>
+      <p>The equivalent of popping a shell on this system is calling interrupt <code>0x7F</code>. On earlier challenges in the series, there is a dedicated function called <code>unlock_door</code> that does this.</p>
+
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-unlock-door-function.png"
+          loading="lazy" alt="The unlock door function." />
+      </figure>
+
+      <p>Executing the following assembly is functionally equivalent to calling the <code>unlock_door</code> function.</p>
+
+      <pre><code>3240 00ff      mov     #0xff00, sr
+b012 1000      call    #0x10
+</code></pre>
+
+The assembled version of the above shellcode is below.
+
+<pre><code>324000ffb0121000</code></pre>
+
+
+
+      <p>The following message is displayed in the interface when the interrupt is called successfully.</p>
+
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-unlock.png"
+          loading="lazy" alt="Unlock status message." />
+      </figure>
+
+
+<h2>High-Level Analysis</h2>
 <h3>Sample Payload</h3>
 <p>The debug payload is relatively short, and the load address is read big-endian. The example payload is below.</p>
 
@@ -131,7 +193,6 @@ Please enter debug payload.
           loading="lazy" alt="Execution reaches address 8000." />
       </figure>
 
-<h2>High-Level Analysis</h2>
 
 <h3>Manual</h3>
 <p>The output for the "manual" debugger command contains the following description of the new behavior:</p>
@@ -142,7 +203,7 @@ Any payload is allowed,  because the unlock key must be passed to the new interr
 
 
 <h3>Payload Format</h3>
-<p>The payload format is the same as in Vancouver.</p>
+<p>The payload format is the same as in <a href="./vancouver.html">Vancouver</a>.</p>
 <br>
 
       <table>
@@ -176,7 +237,7 @@ Any payload is allowed,  because the unlock key must be passed to the new interr
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">
-	Signature verification on St. Johns, Cold Lake, and Churchill used this function.
+	Signature verification on <a href="./st-johns.html">St. Johns</a>, <a href="./cold-lake.html">Cold Lake</a>, and <a href="churchill.html">Churchill</a> relied on this function.
 </span>
 
 suggests that the debug payload lacks signature verification. This vulnerability can be confirmed by attempting to submit any arbitrary payload. The crafted payload below includes a size field incremented by two and a second return instruction appended to the end of the executable section.</p>
@@ -192,7 +253,7 @@ suggests that the debug payload lacks signature verification. This vulnerability
       </figure>
 
       <h3>Inconsistent Internal SRAM Hash</h3>
-      <p>It is worth noting that the "Internal SRAM Hash" seems to change between runs, which is verifiable by using the reset command and continuing execution from the beginning. Below are two different samples:</p>
+      <p>It is worth noting that the "Internal SRAM Hash" seems to change between runs, which is verifiable by using the <code>reset</code> debugger command and continuing execution from the beginning. Below are two different samples:</p>
 
 <pre><code>Welcome to the test program loader.
 Enabling hardened mode
@@ -215,9 +276,10 @@ Please enter debug payload.
 </code></pre>
 
 <h3>Sanity Check</h3>
-<p>The next step is to verify that the unlock interrupt is disabled, which is accomplished by reusing the portable shellcode from Vancouver.</p>
+<p>The next step is to verify that the unlock interrupt is disabled, which is accomplished by reusing the portable shellcode.</p>
 
-<pre><code>800008324000ffb0121000
+<h5>Shellcode</h5>
+<pre><code>800008<mark>324000ffb0121000</mark>
 </pre></code>
 
       <table>
@@ -238,6 +300,7 @@ Please enter debug payload.
         </tbody>
       </table>
 
+<h5>Disassembly</h5>
 <pre><code>3240 00ff      mov       #0xff00, sr
 b012 1000      call      #0x10
 </code></pre>
@@ -248,14 +311,12 @@ b012 1000      call      #0x10
 <h2>Reverse Engineering Methodology</h2>
 <h3>Similar Systems</h3>
 
-<p>Anyone familiar with the original challenges set will remember that some involved bypassing hardware security modules (HSMs). Detailed writeups for the exploits used to bypass these HSMs <a href="https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-hanoi/">already</a> <a href="https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-whitehorse/">exist</a> elsewhere, but it is worth briefly summarizing<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>Anyone familiar with the original challenges set will remember that some involved bypassing hardware security modules (HSMs). Detailed writeups for the exploits used to bypass these HSMs <a href="https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-hanoi/">already</a> <a href="https://jaimelightfoot.com/blog/microcorruption-embedded-security-ctf-whitehorse/">exist</a> elsewhere, but it is worth briefly summarizing how they work because this system may be similar.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">
-Emphasis added unless otherwise noted. 
-</span>
-
-how they work because this system may be similar.</p>
+For this section, emphasis is added unless otherwise noted. 
+</span></p>
 
 <h5>HSM Model 1</h5>
 <blockquote>
@@ -265,6 +326,7 @@ how they work because this system may be similar.</p>
 <cite>— <a href="https://microcorruption.com/public/manual.pdf">Microcorruption Manual</a></cite>
 </blockquote>
 
+<h5>Case Study: Hanoi</h5>
 The <a href="https://microcorruption.com/debugger/Hanoi">Hanoi</a> firmware version employs the HSM Model 1.
 
 
@@ -290,6 +352,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
 <cite>— <a href="https://microcorruption.com/public/manual.pdf">Microcorruption Manual</a></cite>
 </blockquote>
 
+<h5>Case Study: Whitehorse</h5>
 <p>The <a href="https://microcorruption.com/debugger/Whitehorse">Whitehorse</a> firmware version employs the HSM Model 2.</p>
 
 <blockquote>
@@ -300,7 +363,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
     <cite>— Whitehorse Level Manual</cite>
     </blockquote>
 
-    <p>This description is misleading because it implies that the unlock interrupt is blocked at a hardware level (i.e., only the HSM has deadbolt unlock capabilities), potentially leading an attacker into believing they have to perform black-box analysis against the HSM. In reality, it is possible to exploit a stack overflow and inject malicious code to trigger the unlock interrupt from the MCU (using essentially the same shellcode as in Vancouver).</p>
+    <p>This description is misleading because it implies that the unlock interrupt is blocked at a hardware level (i.e., only the HSM has deadbolt unlock capabilities), potentially leading an attacker into believing they have to perform black-box analysis against the HSM. In reality, it is possible to exploit a stack overflow and inject malicious code to trigger the unlock interrupt from the MCU.</p>
 
     <h3>The Canadian Connection</h3>
     <p>The disassembly and the status messages indicate that interfacing with external hardware likely requires interrupts <code>0x40</code> and <code>0x41</code>—much like <code>0x7D</code> and <code>0x7E</code> from the original challenge set.</p>
@@ -310,7 +373,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
 <h2>Hardware Architecture</h2>
 
 <h3>Vancouver</h3>
-<p>The original hardware design, used in Vancouver and most of the previous versions, resembles the following diagram:</p>
+<p>The original hardware design, used in <a href="./vancouver.html">Vancouver</a> and most of the previous versions, resembles the following diagram:</p>
 <br>
       <figure>
         <img src="./images/vancouver-hardware.png"
@@ -362,7 +425,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
 	      <li>Assume there is no transistor. The unlock interrupt is disabled on the MCU itself, which implies that it might be possible to write shellcode that re-enables it before making the interrupt call.</li>
       </ol>
 
-      <p>The latter mechanism effectively relies on security through obscurity to prevent an attacker from re-enabling the interrupt, which makes it the lower-hanging fruit and the logical next target for analysis. The former would effectively require remote black-box analysis of an undocumented security processor.</p>
+      <p>The latter mechanism effectively relies on security through obscurity to prevent an attacker from re-enabling the interrupt, which makes it the lower-hanging fruit and the logical next target for analysis. The former would effectively require black-box analysis of the interface to an undocumented security processor.</p>
 
       <h2>Re-Enabling Interrupts From Software</h2>
 
@@ -412,7 +475,7 @@ The assembler accepts the mnemonic of the emulated instruction, and inserts the 
           loading="lazy" alt="Short form of emulated instructions." />
       </figure>
 
-      <p>The third and fourth lines from the bottom indicate that the emulated <code>DINT</code> and <code>EINT</code> instructions are replaceable with their core equivalents.</p>
+      <p>The third and fourth lines from the bottom indicate the core instructions equivalent to the emulated <code>DINT</code> and <code>EINT</code> instructions.</p>
 
       <br>
 
@@ -436,7 +499,7 @@ The assembler accepts the mnemonic of the emulated instruction, and inserts the 
         </tbody>
       </table>
 
-      <p>The naive approach is attempting to globally disable and re-enable all interrupts in the hope of re-enabling the blocked one. A simple test of this functionality would entail calling DINT followed by EINT, but there is one caveat to this approach: according to this <a href="https://e2e.ti.com/support/microcontrollers/msp-low-power-microcontrollers-group/msp430/f/msp-low-power-microcontroller-forum/397100/the-notes-about-dint-and-eint-in-user-s-guide">forum post</a>, a few NOP instructions must follow DINT because it takes multiple cycles to take effect.</p>
+      <p>The naive approach is attempting to globally disable and re-enable all interrupts in the hope of re-enabling the blocked one. A simple test of this functionality would entail calling <code>DINT</code> followed by <code>EINT</code>, but there is one caveat to this approach: according to this <a href="https://e2e.ti.com/support/microcontrollers/msp-low-power-microcontrollers-group/msp430/f/msp-low-power-microcontroller-forum/397100/the-notes-about-dint-and-eint-in-user-s-guide">forum post</a>, a few <code>NOP</code> instructions must follow <code>DINT</code> because it takes multiple cycles to take effect.</p>
 
 
 <h3>Working Around Broken Assemblers</h3>
@@ -483,10 +546,10 @@ The assembler accepts the mnemonic of the emulated instruction, and inserts the 
 b012 1000      call	#0x10
 </xmp></code></pre>
 
-<p>Testing the above payload on Vancouver confirms that the unlock is triggered, but this does not work on Halifax. The call to <code>0x10</code> once again returns without visible effect. With the possibility of re-enabling the interrupt from software eliminated, the only remaining option is performing <em>black-box analysis</em> against the secure processor.</p>
+<p>Testing the above payload on Vancouver confirms that the unlock is triggered, but this does not work on Halifax. The call to <code>0x10</code> once again returns without visible effect. With the possibility of re-enabling the interrupt from software eliminated, the only remaining option is black-box analysis of the interface to the secure processor.</p>
 
 <h2>Black Box Analysis</h2>
-<p>For the sake of argument, assume that the logical <code>AND</code> transistor is present moving forward. Before beginning any deep analysis, the first step is understanding the secure processor API, which requires a more detailed review of the disassembly and flow control for the <code>main</code> function.</p>
+<p>For the sake of argument, assume that the logical <code>AND</code> transistor is present moving forward. Before beginning any deep analysis, the first step is understanding the code that makes interrupt calls to the secure processor, which requires a more detailed review of the disassembly and flow control for the <code>main</code> function.</p>
 
 <h2>Static Analysis</h2>
 <hr>
@@ -572,7 +635,7 @@ b012 1000      call	#0x10
         </tbody>
       </table>
 
-      <p>The 0x40 interrupt seems to be responsible for enabling "hardened mode." This interrupt effectively disables the unlock interrupt, and the standard portable shellcode has no discernible effect when executed after this call.</p>
+      <p>The <code>0x40</code> interrupt seems to be responsible for enabling "hardened mode." This interrupt effectively disables the unlock interrupt, and the standard portable shellcode has no discernible effect when executed after this call.</p>
 
       <pre><code>444a:  mov	#0x4658 "Enabling hardened mode", r15
 444e:  call	#0x4586 &lt;puts&gt;
@@ -582,7 +645,7 @@ b012 1000      call	#0x10
 445a:  call	#0x4550 &lt;INT&gt;
 </code></pre>
 
-<p>The firmware behavior confirms this, as it attempts to call the unlock interrupt to ensure it is disabled.</p>
+<p>The firmware behavior confirms this, as it subsequently attempts to call the unlock interrupt to ensure it is disabled.</p>
 
       <pre><code>4462:  mov	#0x466f "Verifying 0x7f interrupt disabled", r15
 4466:  call	#0x4586 &lt;puts&gt;
@@ -602,7 +665,7 @@ unlock by providing the 16 byte key to 0x41 interrupt
       <h3>Implementation Conjecture</h3>
 <p>Based on the above analysis, a few tentative theories emerge:</p>
 <ul>
-	<li>The 0x40 interrupt causes the secure processor to pull its GPIO pin low, causing the logical <code>AND</code> gate to turn off and physically preventing unlock interrupts triggered from the MCU from retracting the deadbolt.</li>
+	<li>The <code>0x40</code> interrupt causes the secure processor to pull its GPIO pin low, causing the logical <code>AND</code> gate to turn off and physically preventing unlock interrupts triggered from the MCU from retracting the deadbolt.</li>
 	<li>Turning the secure processor's GPIO pin back on requires sending a 16-byte key over the serial line.</li>
 	<li>The 16-byte key resides in "SRAM," likely standing for "secure RAM" or "static RAM" and presumably referring to the internal memory of the secure processor.</li>
 	<li>The key must be passed to the secure processor through interrupt <code>0x41</code>, using an undocumented calling convention.</li>
@@ -632,7 +695,7 @@ unlock by providing the 16 byte key to 0x41 interrupt
 
  and fixing vulnerabilities is the vendor's responsibility.</p>
 
-<p>The main difference between these device classes (from a software exploitation standpoint) is the degree to which they are Turing complete. Some of these devices may implement operations using varying amounts of analog logic, which means that exploitation in the traditional sense may not be possible because there is no software on the device to exploit.</p>
+<p>One concern (from a software exploitation standpoint) is the degree to which the device is Turing complete. Some of these devices could theoretically implement operations using varying amounts of analog logic, which means that exploitation in the traditional sense may not be possible because there is no software on the device to exploit.</p>
 
 
 <h3>Theoretical Attacks</h3>
@@ -643,9 +706,9 @@ unlock by providing the 16 byte key to 0x41 interrupt
 	<li>Leaking the key from SRAM.</li>
 </ol>
 
-<p>Arbitrary code execution may or may not be possible depending on whether the backing hardware device is Turing complete. Fuzzing would also be difficult without some understanding of the communication protocol or calling convention. Without having an example of how to communicate with the device normally, there are similar problems with attempting to bypass authentication.</p> 
+<p>Arbitrary code execution may or may not be possible. Fuzzing would be difficult without some understanding of the communication protocol or calling convention. Without having an example of how to communicate with the device normally, there are similar problems with attempting to bypass authentication.</p> 
 
-<p>Assuming the device is Turing complete, the compiled code for the implementation may reside in SRAM. Even if it is impossible to extract the key, acquiring an image of the running firmware for further analysis might still be possible. One way or another, an information leak is likely required.</p>
+<p>The compiled code for the implementation may reside in SRAM. Even if it is impossible to extract the key, acquiring an image of the running firmware for further analysis might still be possible. One way or another, an information leak is likely required.</p>
 
 <h2>Hunting For Information Leaks</h2>
 <h3>SRAM Hash Calculation</h3>
@@ -740,8 +803,8 @@ r12 4400 r13 43e0 <mark>r14 1000 r15 0000</mark>
 	<li>Changing <code>R14</code> to 0x800 and <code>R15</code> to 0x1 seems to result in normal behavior.</li>
 </ul>
 
-<h3>Address Range Hashing</h3>
-<p>If the <code>sha256_internal</code> function is computing a checksum for a fixed-length block of memory at a known offset, it should logically need only one parameter (the address of the stack buffer where interrupt 0x41 writes the returned checksum). The fact that there are two more implies that the interrupt hashes a specific section of SRAM. Such functionality would require two more parameters, i.e., a start and end address.</p>
+<h3>Address Range Data Hashing</h3>
+<p>If the <code>sha256_internal</code> function is computing a checksum for a fixed-length block of memory at a known offset, it should logically need only one parameter (the address of the stack buffer where interrupt <code>0x41</code> writes the returned checksum). The fact that there are two more implies that the interrupt hashes a specific section of SRAM. Such functionality would require two more parameters, i.e., a start and end address.</p>
 
 
 <pre><code class='language-ascii-noshadows'>               ┌───┬────┐                    ┌───┬────┐
@@ -886,7 +949,7 @@ b'96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7'
       </figure>
       <hr>
 
-<p>All that is required is some payload code to patch in an unconditional branch in the middle of the <code>main</code> function, set the values for <code>R13</code>, <code>R14</code>, and <code>R15</code>, and branch to address <code>0x44a6</code> (right before the call to <code>sha256_internalM</code>). This code will run in a loop, printing the hash for every byte in SRAM. An improvised "data section" is also necessary to store a counter used as the offset passed in <code>R15</code> with each iteration.</p>
+<p>All that is required is some payload code to patch in an unconditional branch in the middle of the <code>main</code> function, set the values for <code>R13</code>, <code>R14</code>, and <code>R15</code>, and branch to address <code>0x44a6</code> (right before the call to <code>sha256_internal</code>). This code will run in a loop, printing the hash for every byte in SRAM. An improvised "data section" is also necessary to store a counter used as the offset passed in <code>R15</code> with each iteration.</p>
 
 
 
@@ -1036,7 +1099,7 @@ b'96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7'
 
 </code></pre>
 
-<p>The value at <code>0x8006</code> is the counter variable that contains the start offset SRAM section to hash for each iteration.</p>
+<p>The value at <code>0x8006</code> is the counter containing the offset for the byte in SRAM to hash for the current iteration.</p>
 
 <pre><code class='language-ascii-noshadows'>       ┌────────────────────┐      ┌──────┐
        │mov     #0x8002, r4 │      │      │
@@ -1117,7 +1180,7 @@ b'96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7'
 
 <p>The last item of importance is the termination condition. This loop will run past the end of SRAM and cause the processor to halt with the <code>"Exceeded SRAM length"</code> error. While this is not problematic for this version, it will be necessary to avoid this when extending the payload with more code later.</p>
 
-<p>The SRAM is 4096 bytes long (0x1000 in hex). One of the words in the data section stores this value, and the payload code compares it to the current offset after every iteration. If the current offset is 0x1000, the code deliberately jumps into null memory and crashes the MCU.</p>
+<p>The SRAM is 4096 bytes long. One of the words in the data section stores this value, and the payload code compares it to the current offset after every iteration. If the current offset is 0x1000, the code deliberately jumps into null memory and crashes the MCU.</p>
 
 <pre><code class='language-ascii-noshadows'>       ┌────────────────────┐        ┌──────┐
        │mov     #0x8002, r4 │        │      │
@@ -1157,7 +1220,7 @@ b'96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7'
        └───────────┘
 </code></pre>
 
-<p>If the current offset is not 0x1000, execution branches into the middle of the <code>main</code> function just before the loop that prints the internal SRAM hash. After it prints one hash, execution will reach the branch instruction patched in earlier. This instruction will cause execution to branch back to the start of the shellcode, thus completing one iteration of the loop.</p>
+<p>If the current offset is not 0x1000, execution branches into the middle of the <code>main</code> function just before the loop that prints the internal SRAM hash. After it prints the hash for the current byte, execution will reach the branch instruction patched in earlier. This instruction will cause execution to branch back to the start of the shellcode, thus completing one iteration of the loop. Every iteration will print the hash of one byte in SRAM to the I/O console.</p>
 
 <pre><code class='language-ascii-noshadows'><xmp>
 
@@ -1256,7 +1319,7 @@ b'96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7'
       </table>
 
 
-      <p>The size field is 255 (0xFF) for convenience, which causes copying of the null memory after the executable code section to the load address along with it. This quirk does not affect the payload code, so this is acceptable.</p>
+      <p>The size field is 255 (0xFF) for convenience, which causes copying of the null memory after the executable code section to the load address along with it. This quirk does not affect the payload code, so it is acceptable.</p>
 <h5>Data section:</h5>
 
 <p>The data section is defined<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
@@ -1573,7 +1636,7 @@ ef5d 0000      add.b	@r13, 0x0(r15)
 <ol>
 	<li>The manual command output refers to "secure memory" storing the key.</li>
 	<li>SRAM has a capacity of 4K.</li>
-	<li>There is no discernable executable code in SRAM.</li>
+	<li>There is no discernible executable code in SRAM.</li>
 	<li>The main MCU targets the highly embedded device market.</li>
 </ol>
 
@@ -1591,7 +1654,7 @@ Regardless of whether the term "secure element" is accurate for describing the A
 </span>
 
 		used synonymously with "secure element" in other contexts.</li>
-	<li>Secure elements are usually cheaper devices that have less storage than standard TPMs. 4KB is a miniscule quantity of memory for one of these; the usual<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+	<li>Secure elements are usually cheaper devices that have less storage than standard TPMs. 4KB is a minuscule quantity of memory for one of these; the usual<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">For further details, see 7:07 to 11:11 in <a href="https://www.youtube.com/watch?v=LdW1FGUQgFo&t=427s">this video</a>.</span>
@@ -1609,12 +1672,12 @@ Regardless of whether the term "secure element" is accurate for describing the A
 <h3>Refining The Scope</h3>
 <p>Assuming the "secure processor" is a secure element, the vendor typically develops the code running on it.</p> 
 
-<p>The contents of SRAM appear to be data only, which implies that there is separate memory for executable code (or that it might be an ASIC-based implementation). Lacking a way to leak executable code from the secure element, achieving code execution may be impossible. An authentication bypass vulnerability is the last contingency.</p>
+<p>The contents of SRAM appear to be data only, which implies that there is separate memory for executable code. Lacking a way to leak executable code from the secure element, achieving code execution may be impossible. An authentication bypass vulnerability is the last contingency.</p>
 
 
 <p>The lack of SRAM consistency confirms the random generation of the 16-byte key during each run. Unblocking interrupt <code>0x7F</code> would require brute-forcing the calling convention for interrupt <code>0x41</code> and passing every possible key in SRAM.</p>
 
-<h2>The Secure Element API</h2>
+<h2>The Secure Element ABI</h2>
 <h3>Dissecting The Calling Convention</h3>
 <p>Recall that interrupt <code>0x41</code> calculates the sha256 hash of SRAM <em>and</em> takes a key to unblock the unlock interrupt. The <code>sha256_internal</code> function is a wrapper around a call to interrupt <code>0x41</code>, so the <code>INT</code> call within <code>sha256_internal</code> provides a clue as to what calling convention interrupt <code>0x41</code> might expect when parsing the key.</p>
 
@@ -1647,7 +1710,7 @@ before the call to <code>INT</code>, neither word could store a pointer to the k
 <pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
       │                 STACK                  │
 ┌──┐  ├──────┬─────────────────────────────────┤
-│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBERR)         │
+│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBER)          │
 └──┘  ├──────┼─────────────────────────────────┤
       │<mark>SP+0x2</mark>│OFFSET                           │
       ├──────┼─────────────────────────────────┤
@@ -1692,7 +1755,7 @@ before the call to <code>INT</code>, neither word could store a pointer to the k
 <pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
       │                 STACK                  │
 ┌──┐  ├──────┬─────────────────────────────────┤
-│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBERR)         │
+│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBER)          │
 └──┘  ├──────┼─────────────────────────────────┤
       │SP+0x2│OFFSET                           │
       ├──────┼─────────────────────────────────┤
@@ -1716,7 +1779,7 @@ before the call to <code>INT</code>, neither word could store a pointer to the k
 <pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
       │                 STACK                  │
 ┌──┐  ├──────┬─────────────────────────────────┤
-│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBERR)         │
+│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBER)          │
 └──┘  ├──────┼─────────────────────────────────┤
       │SP+0x2│OFFSET                           │
       ├──────┼─────────────────────────────────┤
@@ -1756,7 +1819,7 @@ before the call to <code>INT</code>, neither word could store a pointer to the k
 <p>Accounting for both the endianness and the exact offset being unknown, there are 608 possible keys on the high end.</p>
 
 <h3>Approach To Automation</h3>
-<p>Emulators/debuggers exist for this system that might allow for easier integration with higher-level tooling (i.e., Python), but none of these support the new undocumented interrupts (including 0x40 and 0x41).</p>
+<p>Emulators/debuggers exist for this system that might allow for easier integration with higher-level tooling (i.e., Python), but none of these support the new undocumented interrupts (including <code>0x40</code> and <code>0x41</code>).</p>
 
 <p>There are two options:</p>
 <ol>
@@ -1874,7 +1937,7 @@ bytes from user input and write them to address <code>0x9000</code> in the main 
       └─────────────┴────────┴────┴───┴────┘
 </code></pre>
 
-<p>This code is part of a loop run before every call to interrupt <code>0x41</code>. The memory at address <code>0xB000</code> is a shadow buffer. The shellcode will overwrite it with unchanging data sourced from the canonical buffer at address <code>0x9000</code> during each iteration, ensuring that unknown side effects do not corrupt the shadow buffer data after the return from the interrupt callgate.</p>
+<p>This code is part of a loop run before every call to interrupt <code>0x41</code>. The memory at address <code>0xB000</code> is a shadow buffer. The shellcode will overwrite it with unchanging data sourced from the canonical buffer at address <code>0x9000</code> during each iteration, ensuring that unknown side effects do not corrupt the canonical buffer data after the return from the interrupt callgate.</p>
 
 <p>Next is the counter for the current position in the shadow buffer:</p>
 
@@ -1936,7 +1999,7 @@ bytes from user input and write them to address <code>0x9000</code> in the main 
 0000 0000 0000 0000
 </code></pre>
 
-<p>The value of <code>0xAFFF</code> will be incremented by 0x1, making it <code>0xB000</code> (the beginning of the shadow buffer). This value is the address for the current key candidate. It will be incremented by one with each iteration of the loop.</p>
+<p>The value of <code>0xAFFF</code> will be incremented by 0x1, making it <code>0xB000</code> (the beginning of the shadow buffer). This value is the start offset where the current key candidate begins. It will be incremented by one with each iteration of the loop.</p>
 
 <h5>current_offset = 1</h5>
 <pre><code class='language-ascii-noshadows'>  ┌──────┐
@@ -2035,7 +2098,7 @@ bytes from user input and write them to address <code>0x9000</code> in the main 
       ┌──────────────────────────────────────────────────┐
       │                 STACK                            │
 ┌──┐  ├──────┬───────────────────────────────────────────┤
-│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBERR)                   │
+│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBER)                    │
 └──┘  ├──────┼───────────────────────────────────────────┤
       │SP+0x2│0x2 (OFFSET)                               │
       ├──────┼───────────────────────────────────────────┤
@@ -2052,9 +2115,9 @@ bytes from user input and write them to address <code>0x9000</code> in the main 
 
 </code></pre>
 
-<p>It is unclear which stack offset should contain the pointer to the key, but it obviously cannot replace the offset or length because that would break the hashing logic. Valid dummy values (0x2) serve as surrogates for these two words. The four words after that are the pointer to the current offset in the shadow buffer. The call should succeed if interrupt <code>0x41</code> interprets one of those stack words as a key pointer.</p>
+<p>It is unclear which stack offset should contain the pointer to the key, but it obviously cannot replace the offset or length because that would break the hashing logic. Valid dummy values (0x2) serve as surrogates for these two words. The four words after that are the pointer to the current offset in the shadow buffer. The call should succeed if interrupt <code>0x41</code> interprets one of these words on the stack as a key pointer.</p>
 
-<p>There must be some mechanism to verify whether the secure enclave accepted the key and unblocked the unlock interrupt, so it is tested by attempting to call the latter. The portable shellcode from Vancouver accomplishes this.</p> 
+<p>There must be some mechanism to verify whether the secure enclave accepted the key and unblocked the unlock interrupt, so it is tested by attempting to call the latter.</p> 
 
 <pre><code class='language-ascii-noshadows'>      ┌─────────┬─────────────────────┐
       │3e40 00f0│mov  #0xf000, r14    │
@@ -2102,7 +2165,7 @@ bytes from user input and write them to address <code>0x9000</code> in the main 
 
 </code></pre>
 
-<p>The successful unlock status message should trigger if the current key candidate authenticates to the secure enclave.</p>
+<p>The successful unlock status message should appear if the current key candidate authenticates to the secure enclave.</p>
 
 <p>Lastly, if the unlock interrupt call does not succeed, the last defined word in the data section is compared to the current offset in the shadow buffer.
 
@@ -2334,7 +2397,7 @@ if the extracted data had a consistent format, but the hexdump of the data does 
 <pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
       │                 STACK                  │
 ┌──┐  ├──────┬─────────────────────────────────┤
-│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBERR)         │
+│SP├─►│SP+0x0│0x41 (INTERRUPT NUMBER)          │
 └──┘  ├──────┼─────────────────────────────────┤
       │SP+0x2│OFFSET                           │
       ├──────┼─────────────────────────────────┤
@@ -2354,7 +2417,7 @@ if the extracted data had a consistent format, but the hexdump of the data does 
 
 <p>It is implausible that the implementation would reference a pointer outside the current stack frame, which rules out the first three words of the checksum return buffer. While not impossible, this implementation choice would be so outlandish as to be outright broken.</p>
 
-<p>The only remaining option is the pointer to the checksum return buffer at <code>SP+0x6</code>, which could theoretically double as the pointer to the key. Recall that the interrupt call dereferences this pointer and overwrites the array with the SRAM hash.</p>
+<p>The only remaining option is the pointer to the checksum return buffer at <code>SP+0x6</code>, which could theoretically double as the pointer to the key. Recall that the interrupt call dereferences this pointer and overwrites the buffer with the SRAM hash.</p>
 
 <pre><code class='language-ascii-noshadows'>            ┌───────────────────────────────────────┐
             │        CHECKSUM RETURN BUFFER         │
@@ -2583,7 +2646,7 @@ b012 5045
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">The new backend brought with it numerous <s>bugs</s> features. Those who thought the original set was too easy will praise the introduction of <em>hard mode</em>—in the form of the <em>new and improved</em> (dis)assembler.</span>
 
-bugs) whether the erroneous interrupt number in the manual and status messages was a deliberate attempt at psychological warfare.</p>
+issues) whether the erroneous interrupt number in the manual and status messages was a deliberate attempt at psychological warfare.</p>
 
 <blockquote>
 The nature of the typo makes a subtle psychological difference: one reference might be mistaken, but multiple sources saying the same thing isn't an accident. [...] If the goal is to make it look like a mistake, only reference it in one place or not at all. If the goal is to make it look malicious, a third option is to add some window dressing to the level manual about how LockItAll hired a "psychological warfare specialist" to make their device unhackable.
@@ -2680,7 +2743,7 @@ I discovered a string formatting error in my python script that caused it to pri
 <cite>— John Breaux</cite>
 </blockquote>
 
-<p>This error corrupted input for the SRAM rainbow table lookup process and prevented Breaux from identifying interrupt 0x42 as the correct one (even though the payload code otherwise should have). The failure was a byproduct of the choice to leak only the first three bytes of each hash, as such a scheme required more convoluted Python code to massage the output back into the correct representation of the source data.</p>
+<p>This error corrupted input for the SRAM rainbow table lookup process and prevented Breaux from identifying interrupt <code>0x42</code> as the correct one (even though the payload code otherwise should have). The failure was a byproduct of the choice to leak only the first three bytes of each hash, as such a scheme required more convoluted Python code to massage the output back into the correct representation of the source data.</p>
 
 <blockquote>
 We exhausted our supply of ideas, and eventually concluded that the challenge must be broken. [...] Over the course of the next 6 months, the three of us worked collaboratively to figure out what went wrong. 
@@ -2716,9 +2779,7 @@ It doesn't [...] take more than one cycle to execute. [...] Most other interrupt
 </blockquote>
 
 
-<p>While not directly relevant to the solution, Breaux uses an unorthodox technique to narrow down candidate interrupt numbers. There is a built-in debugger command that prints the current cycle count. Most interrupt calls take a few cycles to execute. By this logic, any interrupt number that takes multiple cycles must be doing something on the backend.</p>
-
-<p>Unfortunately, interrupt 0x42 seems to break this assumption.</p>
+<p>While not directly relevant to the solution, Breaux uses an unorthodox technique to narrow down candidate interrupt numbers. There is a built-in debugger command that prints the current cycle count. Most interrupt calls take a few cycles to execute. By this logic, any interrupt number that takes multiple cycles must be doing something on the backend. Unfortunately, interrupt <code>0x42</code> seems to break this assumption.</p>
 
 
 <h4>Read Address Overflow Technique — Developed by Anonymous Author</h4>
@@ -2730,25 +2791,25 @@ When I was poking around with alternate interrupt numbers, I did check if interr
 <br><cite>— John Breaux</cite>
 </blockquote>
 
-<p>While a reasonable conclusion, this is not strictly true. A side effect in interrupt 0x42 is introducible via specifically chosen values passed on the stack.</p>
+<p>While a reasonable conclusion, this is not strictly true. A side effect in interrupt <code>0x42</code> is introducible via specifically chosen values passed on the stack.</p>
 
-<p>After ruling out interrupt 0x41, testing subsequent interrupt numbers uses the following stack layout.</p>
+<p>After ruling out interrupt <code>0x41</code>, testing subsequent interrupt numbers uses the following stack layout.</p>
 
 
 <pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
       │                 STACK                  │
 ┌──┐  ├──────┬─────────────────────────────────┤
-│SP├─►│SP+0x0│0x40-0x4F (INTERRUPT NUMBERR)    │
+│SP├─►│SP+0x0│0x40-0x4F (INTERRUPT NUMBER)     │
 └──┘  ├──────┼─────────────────────────────────┤
       │SP+0x2│KEY POINTER                      │
       ├──────┼─────────────────────────────────┤
       │SP+0x4│KEY POINTER                      │
       ├──────┼─────────────────────────────────┤
-      │SP+0x6│KEY POINTER                      ├──┐
-      ├──────┼─────────────────────────────────┤  │
-      │SP+0x8│KEY POINTER                      │  │
-      ├──────┼─────────────────────────────────┤  │
-      │SP+0xa│KEY POINTER                      │◄─┘
+      │SP+0x6│KEY POINTER                      │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x8│KEY POINTER                      │
+      ├──────┼─────────────────────────────────┤
+      │SP+0xa│KEY POINTER                      │
       ├──────┼─────────────────────────────────┤
       │SP+0xc│KEY POINTER                      │
       └──────┴─────────────────────────────────┘
@@ -2762,17 +2823,17 @@ When I was poking around with alternate interrupt numbers, I did check if interr
 <pre><code class='language-ascii-noshadows'>      ┌────────────────────────────────────────┐
       │                 STACK                  │
 ┌──┐  ├──────┬─────────────────────────────────┤
-│SP├─►│SP+0x0│0x40-0x4F (INTERRUPT NUMBERR)    │
+│SP├─►│SP+0x0│0x40-0x4F (INTERRUPT NUMBER)     │
 └──┘  ├──────┼─────────────────────────────────┤
       │SP+0x2│0xFFFF                           │
       ├──────┼─────────────────────────────────┤
       │SP+0x4│0xFFFF                           │
       ├──────┼─────────────────────────────────┤
-      │SP+0x6│0xFFFF                           ├──┐
-      ├──────┼─────────────────────────────────┤  │
-      │SP+0x8│0xFFFF                           │  │
-      ├──────┼─────────────────────────────────┤  │
-      │SP+0xa│0xFFFF                           │◄─┘
+      │SP+0x6│0xFFFF                           │
+      ├──────┼─────────────────────────────────┤
+      │SP+0x8│0xFFFF                           │
+      ├──────┼─────────────────────────────────┤
+      │SP+0xa│0xFFFF                           │
       ├──────┼─────────────────────────────────┤
       │SP+0xc│0xFFFF                           │
       └──────┴─────────────────────────────────┘
@@ -2786,7 +2847,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 
 <p>This error occurs because attempting to read a word or multiple bytes starting from that address would cause an integer overflow and a wraparound to address 0x0000, which crashes the processor.</p>
 
-<p>Out of all interrupts in the 0x40-0x4F range, this only occurs when calling interrupt 0x42. This pattern suggests that only interrupt 0x42 dereferences one of the pointers. The creator of this technique used it to narrow down which interrupts were attempting to read from MCU memory, which allowed for messier payload code—without concern for subtle breakage.</p>
+<p>Out of all interrupts in the <code>0x40-0x4F</code> range, this only occurs when calling interrupt <code>0x42</code>. This pattern suggests that only interrupt <code>0x42</code> dereferences one of the pointers. The creator of this technique used it to narrow down which interrupts were attempting to read from MCU memory, which allowed for messier payload code—without concern for subtle breakage.</p>
 
 <p>This technique acts as a sanity check. Aside from that, the rest of the exploit is more or less identical.</p>
 
@@ -2806,7 +2867,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 
 <h5>1. Do not execute arbitrary user-supplied payloads on the main MCU.</h5>
 
-<p>A glaring issue remains unexamined: <em>nothing about this architecture requires it to allow arbitrary unsigned code execution on the main MCU</em>. Debug payloads should be signed (as on St. John's or Cold Lake) or eliminated from the implementation altogether.</p>
+<p>A glaring issue remains unexamined: <em>nothing about this architecture requires it to allow arbitrary unsigned code execution on the main MCU</em>. Debug payloads should be signed (as on <a href="./st-johns.html">St. John's</a> or <a href="cold-lake.html">Cold Lake</a>) or eliminated from the implementation altogether.</p>
 
 <p>This mitigation requires attackers to bypass the signature verification mechanism or find another issue that allows them to gain a foothold on the main MCU, adding another layer of defense-in-depth.</p>
 
