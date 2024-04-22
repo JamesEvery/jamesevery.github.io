@@ -26,7 +26,7 @@
 <body id="top">
   <header>
     <h1>
-A Case Study in the Perils of Security Through Obscurity 
+Welcome To The Wasteland: A Case Study in the Perils of Security Through Obscurity 
     </h1>
 	    </h2>
     <p class="author">
@@ -58,6 +58,7 @@ A Case Study in the Perils of Security Through Obscurity
     <br>
     <b>Reading Time:</b> 9 minutes
 
+    <h2>Background</h2>
 
     <p>The following is a walkthrough for the first in the new series of Microcorruption challenges. The original CTF-turned-wargame was developed a decade ago by Matasano and centered around a deliberately vulnerable smart lock. The goal for each challenge was simple: write a software exploit to trigger an unlock.</p>
 
@@ -313,18 +314,22 @@ r12 2800 r13 0000 r14 03ff r15 0000
 
 <p>Based on the fact that the value stored in <code>R11</code> is interpreted as an address and called, the first two bytes of the payload appear to be the load address for the executable segment.</p>
 
+<h5>Load Address:</h5>
 <pre><code><mark>8000</mark>023041</code></pre>
 
 <p>The third byte is the executable segment size.</p>
 
+<h5>Executable Segment Size:</h5>
 <pre><code>8000<mark>02</mark>3041</code></pre>
 
 The last two bytes must be the executable segment contents—in this case, a single two-byte instruction.</p>
 
+<h5>Executable Code:</h5>
 <pre><code>800002<mark>3041</mark></code></pre>
 
 <p>Disassembling these bytes produces a valid <code>RET</code> instruction.</p>
 
+<h5>Disassembly:</h5>
 <pre><code><mark>3041</mark> ret</code></pre>
 
 <p>The executable section of the payload is copied to the load address via the <code>memcpy</code> function just before the call to <code>R11</code>. The assembly to do this is as follows:
@@ -431,7 +436,7 @@ b012 a844      call    #0x44a8
       <ol>
 	      <li>Reading assembly is often not as difficult as many people might think—especially when dealing with resource-constrained embedded systems with small codebases. As Jaime Lightfoot's writeup demonstrates, it is possible to reverse engineer this firmware without Ghidra or any other tool. While there are debug symbols in this instance (i.e., function names), nothing prevents an attacker without access to debug symbols from guessing the purpose of functions and renaming them.</li>
 
-	      <li>Decompilers are usually passable at reconstructing the source code (at least insofar as understanding flow control is concerned), eliminating the main theoretical advantage of compilation as a countermeasure.</li>
+	      <li>Tools like Ghidra are usually passable at reconstructing the source code (or at least an assembly level flow control graph), eliminating the main theoretical advantage of compilation as a countermeasure.</li>
       </ol>
       <p>To illustrate the second point, this is the decompilation of the <code>main</code> function.</p>
       <br>
