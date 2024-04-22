@@ -312,24 +312,24 @@ r12 2800 r13 0000 r14 03ff r15 0000
 
 <h3>Results</h3>
 
+<h5>Load Address</h5>
 <p>Based on the fact that the value stored in <code>R11</code> is interpreted as an address and called, the first two bytes of the payload appear to be the load address for the executable segment.</p>
 
-<h5>Load Address:</h5>
 <pre><code><mark>8000</mark>023041</code></pre>
 
+<h5>Executable Segment Size</h5>
 <p>The third byte is the executable segment size.</p>
 
-<h5>Executable Segment Size:</h5>
 <pre><code>8000<mark>02</mark>3041</code></pre>
 
+<h5>Executable Code</h5>
 The last two bytes must be the executable segment contents—in this case, a single two-byte instruction.</p>
 
-<h5>Executable Code:</h5>
 <pre><code>800002<mark>3041</mark></code></pre>
 
+<h5>Disassembly</h5>
 <p>Disassembling these bytes produces a valid <code>RET</code> instruction.</p>
 
-<h5>Disassembly:</h5>
 <pre><code><mark>3041</mark> ret</code></pre>
 
 <p>The executable section of the payload is copied to the load address via the <code>memcpy</code> function just before the call to <code>R11</code>. The assembly to do this is as follows:
@@ -342,9 +342,9 @@ The last two bytes must be the executable segment contents—in this case, a sin
       </figure>
       <hr>
 
-<p>Even without knowing the calling convention for memcpy (which is likely the same as any other implementation), it is reasonable to assume that <code>R10</code> is the number of bytes to copy (0x2), 0x2403 is the source location, and <code>R11</code> (which contains 0x8000) is the destination address.</p>
+      <p>Even without knowing the calling convention for <code>memcpy</code> (which is likely the same as any other implementation), it is reasonable to assume that <code>R10</code> is the number of bytes to copy (0x2), 0x2403 is the source location, and <code>R11</code> (which contains 0x8000) is the destination address.</p>
 
-<p>Examining the memory near address 0x8000 after the call to memcpy confirms this.</p>
+      <p>Examining the memory near address 0x8000 after the call to <code>memcpy</code> confirms this.</p>
 
 <pre><code>8000: <mark>3041</mark> 0000 0000 0000 0000 0000 0000 0000   0A..............
 8010: 0000 0000 0000 0000 0000 0000 0000 0000   ................
