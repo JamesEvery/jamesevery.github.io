@@ -40,7 +40,7 @@
 <body id="top">
   <header>
     <h1>
-	    Meteorological Opposite of Hell: Black Box Analysis and Exploitation of a Secure Element ABI
+	    Meteorological Opposite of Hell: Secure Element Black Box Firmware Exploitation 
     </h1>
 	    </h2>
     <p class="author">
@@ -87,7 +87,7 @@
 <p>Each challenge is centered around a deliberately vulnerable smart lock. The goal is simple: write a software exploit to trigger an unlock.</p>
 
 <h5>Halifax</h5>
-    <p>The unlock interrupt is now disabled via an undocumented mechanism. While the debug payload is unsigned and achieving arbitrary code execution is trivial, the portable shellcode—which works on previous firmware versions—no longer appears to retract the deadbolt.</p>
+    <p>The unlock interrupt is now disabled via an undocumented mechanism. While the debug payload is unsigned and achieving arbitrary code execution is trivial, the portable shellcode—which works on previous firmware versions—can no longer successfully call interrupt <code>0x7F</code>.</p>
 
     <p><b>Author's Note:</b></p>
 
@@ -164,6 +164,8 @@ The assembled version of the above shellcode is below.
 
 
 <h2>High-Level Analysis</h2>
+<p>With the prelude out of the way, the reverse engineering process begins here.</p>
+
 <h3>Sample Payload</h3>
 <p>The debug payload is relatively short, and the load address is read big-endian. The example payload is below.</p>
 
