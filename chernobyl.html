@@ -2650,7 +2650,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 
 <pre><code>6e00ec4c<mark>ffff</mark>7f</code></pre>
 
-<p>The ROP payload is shorter than the shellcode but is still not the minimum length. Returning into the middle of another function, at the exact instruction where it calls <code>INT</code>, avoids the dummy return address taking up space in the ROP chain. The end of the <code>puts</code> function works nicely for this.</p>
+<p>This ROP payload is shorter than the shellcode but is still not the minimum length. Returning into the middle of another function, at the exact instruction where it calls <code>INT</code>, avoids the dummy return address taking up space in the ROP chain. The end of the <code>puts</code> function works nicely for this.</p>
 
 <pre><code>4d6a:  3012 0a00      push      #0xa
 4d6e:  0312           push      #0x0
@@ -4046,7 +4046,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
   └────────┴────────┴────────┘    │                                  
 </code></pre>
 
-<p>The new forward pointer effectively breaks the linked list, causing the algorithm to write the sum of all freed chunk sizes to the size field in the overflowed chunk rather than the "chunk" on the stack. Additional testing confirms that this works when skipping any number of chunks. Eliminating the issue can thus be accomplished by omitting <code>0x50fc</code> from the list of forward pointers.</p>
+<p>The new forward pointer effectively breaks the linked list, causing the algorithm to write the sum of all freed chunk sizes to the size field in the overflowed chunk rather than the "chunk" on the stack. Additional testing confirms that this works when skipping any number of chunks. Eliminating the bug can thus be accomplished by omitting <code>0x50fc</code> from the list of forward pointers.</p>
 
 <pre><code>&gt;&gt;&gt; fdlist = ["5c51", "bc51", "1c52", "7c52", "dc52", "3c53"]</code></pre>
 
