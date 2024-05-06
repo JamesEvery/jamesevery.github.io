@@ -1,0 +1,9 @@
+section {background-color: #fff; border: 0px solid #fff; display: none; width: 100%; margin: 15px auto; text-align: left;}
+section:target {display: block;}
+
+#nav,
+#nav li {display: block; margin: 0; padding: 0; list-style: none; text-align: center;}
+#nav li {display: inline-block;}
+#nav li a {display: block; text-decoration: none; padding: 3px; margin: 5px; border: 1px solid #99f; border-radius: 5px;}
+#nav li a:focus,
+#nav li a:active {background-color: #ccf; color: #fff;}
