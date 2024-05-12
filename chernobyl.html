@@ -232,12 +232,12 @@
 
       <p>This function has been removed in the Chernobyl firmware, necessitating injecting shellcode to perform the same operation. Executing the following assembly is functionally equivalent to calling the <code>unlock_door</code> function.</p>
 
+      <h5>Disassembly</h5>
       <pre><code>3240 00ff      mov     #0xff00, sr
 b012 1000      call    #0x10
 </code></pre>
 
-The assembled version of the above shellcode is below.
-    
+<h5>Assembly</h5>
 <pre><code>324000ffb0121000</code></pre>
 
 <p>The following message is displayed in the interface when an exploit calls the interrupt successfully.</p>
