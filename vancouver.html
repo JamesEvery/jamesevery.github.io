@@ -58,107 +58,80 @@ Welcome to the Wasteland: A Case Study in the Perils of Security Through Obscuri
     <br>
     <b>Reading Time:</b> 9 minutes
 
+    <h5>Rendering Note:</h5>
+<p>There is a known issue with Android lacking a true monotype system font, which breaks many of the extended ASCII character set diagrams below. Please view this page on a Chrome or Firefox-based desktop browser to avoid rendering issues.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+        Ideally on a Linux host.
+</span>
+
+   <h2>Executive Summary</h2>
+    <p>This system effectively grants arbitrary code execution to anyone who can understand the format for the debug payload. While this challenge is not particularly interesting individually, it sets the stage for the next ones in the series.</p>
+
     <h2>Background</h2>
 
     <p>The following is a walkthrough for the first in the new series of Microcorruption challenges. The original CTF-turned-wargame was developed a decade ago by Matasano and centered around a deliberately vulnerable smart lock. The goal for each challenge was simple: write a software exploit to trigger an unlock.</p>
 
     <p>NCC Group later acquired Matasano. They continued maintaining the wargame and added half a dozen new challenges on October 28<sup>th</sup>, 2022. The following walkthroughs document how to exploit them.</p>
 
-    <h3>System Architecture</h3>
+    <h2>System Architecture</h2>
 
-The emulated device runs on the MSP430 instruction set architecture. It uses a 16-bit little-endian processor and has 64 kilobytes of RAM. The <a href="https://microcorruption.com/public/manual.pdf">official manual</a> includes the details, but relevant functionality is summarized below.
+    <p>The emulated device runs on the MSP430 instruction set architecture. It uses a 16-bit little-endian processor and has 64 kilobytes of RAM. The <a href="https://microcorruption.com/public/manual.pdf">official manual</a> includes the details, but relevant functionality is summarized below.</p>
 
     <h3>Interface</h3>
-    <p>Several separate windows control the debugger functionality. All subsequent challenges in this series use this interface.</p>
+    <p>Several separate windows control the debugger functionality.</p>
 
     <br>
       <figure>
-        <img src="./images/gui.png"
-          loading="lazy" alt="Debugger GUI." />
+        <img src="./images/algiers/algiers-gui.png"
+          loading="eager" alt="Debugger GUI." />
       </figure>
 
-      <p>The following user input prompt is the device's external communication interface.</p>
+      <p>A user input prompt like the following is the device's external communication interface.</p>
       <br>
       <figure>
-        <img src="./images/getsn-popup.png"
+        <img src="./images/algiers/algiers-input-prompt.png"
           loading="lazy" alt="Popup triggered by getsn interrupt." />
       </figure>
 
-    <h3>Overview of the Unlock Interrupt</h3>
-    <p>Triggering an unlock requires a specific interrupt: <code>0x7F</code>. The assembly to implement this call is as follows:</p>
+      <h3>Exploit Development Objective</h3>
+      <p>The equivalent of popping a shell on this system is calling interrupt <code>0x7F</code>. On earlier challenges in the series, there is a dedicated function called <code>unlock_door</code> that does this.</p>
 
-
-    <pre><code><xmp>3012 7f00      push	#0x7f
-b012 a844      call	#0x44a8 <INT></xmp></code></pre>
-
-    <p>The above shellcode passes the <code>0x7F</code> value to the <code>INT</code> function. The disassembly for this function is as follows:</p>
-
-<pre><code><xmp>44a8 <INT>
-44a8:  1f41 0200      mov	0x2(sp), r15
-44ac:  0212           push	sr
-44ae:  4f4f           mov.b	r15, r15
-44b0:  8f10           swpb	r15
-44b2:  3fd0 0080      bis	#0x8000, r15
-44b6:  024f           mov	r15, sr
-44b8:  b012 1000      call	#0x10
-44bc:  3241           pop	sr
-44be:  3041           ret
-</xmp></code></pre>
-
-
-<p>The <code>INT</code> function is a wrapper around the interrupt callgate at address <code>0x10</code>. It is responsible for taking the interrupt number, massaging it into the correct format, and masking it onto the high 8 bits of the status register (<code>SR</code>) before calling address <code>0x10</code>. This call triggers the hardware-specific behavior associated with a given interrupt (e.g., reading input, printing output, or physically retracting the deadbolt). When triggered successfully, the unlock interrupt will cause the following popup to appear.</p>
-
-<br>
+      <br>
       <figure>
-        <img src="./images/solve-popup.png"
-          loading="lazy" alt="Solve popup." />
+        <img src="./images/algiers/algiers-unlock-door-function.png"
+          loading="lazy" alt="The unlock door function." />
       </figure>
 
+      <p>Executing the following shellcode is functionally equivalent to calling the <code>unlock_door</code> function.</p>
 
-<h3>A Brief Note on Shellcode Optimization</h3>
-<p>It is relatively simple to copy the assembly that pushes the <code>0x7F</code> value to the stack and calls the <code>INT</code> function, but this will not work across firmware versions because the absolute address of the <code>INT</code> function will most likely change. Given that every walkthrough in this series uses some variation of this code, it is preferable to have a portable version.</p>
 
-<p>The <code>INT</code> function uses a series of bitwise operations to convert the passed interrupt number into the format expected by the interrupt callgate.</p>
-
-<br>
-      <figure>
-        <img src="./images/vancouver-int-state-1.png"
-          loading="lazy" alt="State before the call to 0x10." />
-      </figure>
-
-<p>When passing <code>0x7F</code>, the register state before the call to address <code>0x10</code> is as follows:</p>
-
-<pre><code>pc  44b8  sp 43f8  sr <mark>ff00</mark>  cg 0000
-r04 0000 r05 5a08 r06 0000 r07 0000 
-r08 0000 r09 0000 r10 0008 r11 8000 
-r12 8008 r13 0000 r14 240b r15 ff00 
-
+      <h5>Disassembly</h5>
+      <pre><code>3240 00ff      mov     #0xff00, sr
+b012 1000      call    #0x10
 </code></pre>
 
-<p>In this case, the INT function effectively sets <code>SR</code> to <code>0xFF00</code> before the call to <code>0x10</code>. This same result is achieved by directly moving <code>0xFF00</code> into <code>SR</code> before calling address <code>0x10</code>.</p>
-
-<p>The assembly to do this is as follows:</p>
-
-<pre><code>3240 00ff      mov	#0xff00, sr
-b012 1000      call	#0x10
-</code></pre>
-
-<p>The assembled version of the above shellcode is below.</p>
-
+      <h5>Assembly</h5>
 <pre><code>324000ffb0121000</code></pre>
 
-<p>This code will trigger an unlock. Unless otherwise noted, all walkthroughs in this series ultimately use some variation of this payload.</p>
-    <h2>
-	    Overview of Vancouver
-    </h2>
+      <p>The following message is displayed in the interface when the interrupt is called successfully.</p>
 
-    <p>This system effectively grants arbitrary code execution to anyone who can understand the format for the debug payload. While this challenge is not particularly interesting individually, it sets the stage for the next ones in the series.</p>
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-unlock.png"
+          loading="lazy" alt="Unlock status message." />
+      </figure>
 
-    <p>The example payload provided in the challenge manual is as follows:</p>
+<h2>High-Level Analysis</h2>
+
+<h3>Sample Payload</h3>
+    <p>The example payload provided in the challenge manual is as follows.</p>
 
 <pre><code class="asm">8000023041</code></pre>
 
-<p>The following message is printed to the I/O console after the system executes the example payload:</p>
+<h3>Sample Output</h3>
+<p>The following message is printed to the I/O console after the system executes the example payload.</p>
 
 <pre><code>Welcome to the test program loader.
 Please enter debug payload.
