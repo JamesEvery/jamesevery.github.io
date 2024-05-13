@@ -74,22 +74,91 @@
     <br>
     <b>Reading Time:</b> 23 minutes
 
-    <p>This challenge is a departure from the previous ones. This iteration uses a custom AES implementation running in ECB mode as an authentication mechanism. Successfully circumventing this protection will allow the program to reach the conditional block at address <code>0x447c</code> and directly trigger the unlock interrupt.</p>    
+    <h5>Rendering Note:</h5>
+<p>There is a known issue with Android lacking a true monotype system font, which breaks many of the extended ASCII character set diagrams below. Please view this page on a Chrome or Firefox-based desktop browser to avoid rendering issues.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
 
-    <p>The Ghidra flow control graph is as follows:</p>
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	Ideally on a Linux host.
+</span>
+
+    <h2>Executive Summary</h2>
+
+    <p>This challenge uses a nonstandard AES implementation running in ECB mode as an authentication mechanism. Successfully circumventing this protection will directly trigger the unlock interrupt.</p>    
+
+    <h2>Background</h2>
+
+    <p>The following is a walkthrough for the fifth in the new series of Microcorruption challenges. The original CTF-turned-wargame was developed a decade ago by Matasano and centered around a deliberately vulnerable smart lock. The goal for each challenge was simple: write a software exploit to trigger an unlock.</p>
+
+    <p>NCC Group later acquired Matasano. They continued maintaining the wargame and added half a dozen new challenges on October 28<sup>th</sup>, 2022, of which this is one.</p>
+
+    <h2>System Architecture</h2>
+
+    <p>The emulated device runs on the MSP430 instruction set architecture. It uses a 16-bit little-endian processor and has 64 kilobytes of RAM. The <a href="https://microcorruption.com/public/manual.pdf">official manual</a> includes the details, but relevant functionality is summarized below.</p>
+
+    <h3>Interface</h3>
+    <p>Several separate windows control the debugger functionality.</p>
+
+    <br>
+      <figure>
+        <img src="./images/algiers/algiers-gui.png"
+          loading="eager" alt="Debugger GUI." />
+      </figure>
+
+      <p>A user input prompt like the following is the device's external communication interface.</p>
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-input-prompt.png"
+          loading="lazy" alt="Popup triggered by getsn interrupt." />
+      </figure>
+
+      <h3>Exploit Development Objective</h3>
+      <p>The equivalent of popping a shell on this system is calling interrupt <code>0x7F</code>. On earlier challenges in the series, there is a dedicated function called <code>unlock_door</code> that does this.</p>
+
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-unlock-door-function.png"
+          loading="lazy" alt="The unlock door function." />
+      </figure>
+
+      <p>Executing the following shellcode is functionally equivalent to calling the <code>unlock_door</code> function.</p>
+
+
+      <h5>Disassembly</h5>
+      <pre><code>3240 00ff      mov     #0xff00, sr
+b012 1000      call    #0x10
+</code></pre>
+
+      <h5>Assembly</h5>
+<pre><code>324000ffb0121000</code></pre>
+
+
+
+      <p>The following message is displayed in the interface when the interrupt is called successfully.</p>
+
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-unlock.png"
+          loading="lazy" alt="Unlock status message." />
+      </figure>
+
+
+
+<h2>High-Level Analysis</h2>
+
+<p>The Ghidra flow control graph for the <code>main</code> function is as follows.</p>
 <br>
       <figure>
         <img src="./images/baku-main-flow-control.png"
           loading="lazy" alt="Main function flow control graph." />
       </figure>
 
-    <p>Running the firmware will produce the following output at the console:</p>
+    <p>Running the firmware will produce the following output at the console.</p>
 
 <pre><code class="asm">SCAN SECURITY DEVICE</code></pre>
 
 <p>Supplying "password" at the prompt causes the I/O console to print the above message again, with no visible effect otherwise.</p>
 
-<h2>High-Level Analysis</h2>
 
 <p>The initial assumption is naturally that this is an ECB oracle, but one of those, by definition, must return encrypted or decrypted data. This system does not seem to have status messages of any kind—evidenced by the defined strings.</p>
 
@@ -119,7 +188,7 @@
         </tbody>
       </table>
 
-      <p>The repetition of "ACCESS GRANTED" and the subtle difference between the two instances is worth noting. The fact that there are multiple similar strings suggests that the firmware references them for different purposes. Several lines in the <code>main</code> function indicate as much:</p>
+      <p>The repetition of "ACCESS GRANTED" and the subtle difference between the two instances is worth noting. The fact that there are multiple similar strings suggests that the firmware references them for different purposes. Several lines in the <code>main</code> function indicate as much.</p>
 
 
 <pre><code class="asm">444e:  mov	#0x487a "<mark>SCAN SECURITY DEVICE</mark>", r15
@@ -140,7 +209,7 @@
 <p>The first and third strings appear to be printed to the console with <code>puts</code>, while the second is compared to something else (probably the output from <code>aes_ecb_decrypt</code>) using <code>memcmp</code>. The firmware may reference this string as a key or password.</p>
 
 <h3>Developer Psychology</h3>
-<p>Before getting into a more detailed analysis, it is reasonable to assume a few things:<p>
+<p>Before getting into a more detailed analysis, it is reasonable to assume a few things.<p>
 <ol>
 	<li><code>The aes_ecb_decrypt</code> function takes some user input and processes it somehow.</li>
 	<li>The firmware compares the result of this black box operation to the string "ACCESS GRANTED!".</li>
@@ -161,7 +230,7 @@
 
 <p>If the firmware stores the key in an inaccessible external device (i.e., an HSM), the decryption operation performed by <code>aes_ecb_decrypt</code> would require an interrupt call to either read the key or have the external device itself decrypt the data.</p>
 
-<p>The following snippets are all of the calls to address <code>0x10</code> that exist in the firmware:</p>
+<p>The following snippets are all of the calls to address <code>0x10</code> that exist in the firmware.</p>
 
 <pre><code>4484: push	#0x0
 4486: push	#0x0
@@ -181,9 +250,9 @@
 44ce: call	#0x44a0 &lt;INT&gt;
 </code></pre>
 
-<p>Interrupts zero, two, and 0x7f are all documented in the supplied <a href="https://microcorruption.com/public/manual.pdf">manual PDF</a>. None of them have anything to do with secure enclaves, HSMs, or TPMs. With that possibility ruled out, the only reasonable goal is cryptographic key extraction.</p>
+<p>Interrupts <code>0x0</code>, <code>0x2</code>, and <code>0x7F</code> are all documented in the supplied <a href="https://microcorruption.com/public/manual.pdf">manual PDF</a>. None of them have anything to do with secure enclaves, HSMs, or TPMs. With that possibility ruled out, the only reasonable goal is cryptographic key extraction.</p>
 
-<p>The flaw in this implementation is that the developers opted to use encryption where they should have used hashing. Even when hash extraction is feasible, brute-forcing is still required to locate an input that could generate that hash—which might not be cryptographically feasible given a sufficiently long password.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>The flaw in this implementation is that the developers opted to use encryption where they should have used hashing. The latter approach is superior because, even when hash extraction is feasible, brute-forcing is still required to locate an input that could generate that hash—which might not be cryptographically feasible given a sufficiently long password.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">There are other flaws with this implementation. A global hardcoded credential is still a single point of failure, regardless of the choice of hashing or encryption. 
@@ -194,7 +263,7 @@
 
 <p>AES is a symmetric cipher. Both encrypt and decrypt operations take two parameters: a key and a message. The constraints are that the message length must be a multiple of 16, and the key must be 16, 24, or 32 bytes long.</p>
 
-<p>Proceeding from the assumption that <code>aes_ecb_decrypt</code> will be similar to any other AES-ECB implementation, the following Python code illustrates roughly how the cipher works:</p>
+<p>Proceeding from the assumption that <code>aes_ecb_decrypt</code> will be similar to any other AES-ECB implementation, the following Python code illustrates roughly how the cipher works.</p>
 
 <pre><code class="asm">from Crypto.Cipher import AES
 import binascii
@@ -208,7 +277,7 @@ def encrypt(key, message):
 	return cipher.encrypt(message)
 </code></pre>
 
-Executing the above functions with dummy messages and keys produces the following output at a Python REPL:
+<p>Executing the above functions with dummy messages and keys produces the following output at a Python REPL.</p>
 
 <pre><code><xmp>$ python3 -i ecb.py
 >>> ciphertext = encrypt(b'ABCDEFGHIJKLMNOP', b'AAAAAAAAAAAAAAAA')
@@ -223,8 +292,8 @@ b'AAAAAAAAAAAAAAAA'
 
 <p>The "ACCESS GRANTED!" string at address <code>0x488f</code> is 16 bytes long (counting the null terminator), making it plausible as either a key or a message.</p>
 
-<pre><code>4880: 4543 5552 4954 5920 4445 5649 4345 00<mark>41</mark>   ECURITY DEVICE.A
-4890: <mark>4343 4553 5320 4752 414e 5445 4421 00</mark>41   CCESS GRANTED!.A
+<pre><code>4880: 4543 5552 4954 5920 4445 5649 4345 00<mark>41</mark>   ECURITY DEVICE.<mark>A</mark>
+4890: <mark>4343 4553 5320 4752 414e 5445 4421 00</mark>41   <mark>CCESS GRANTED!.</mark>A
 </code></pre>
 
 <p>The firmware moves a pointer to address <code>0x48ae</code> into <code>R15</code> shortly before the call to <code>aes_ecb_decrypt</code>, which suggests that it is the second parameter.</p>
@@ -312,16 +381,19 @@ b'AAAAAAAAAAAAAAAA'
 
 <p>Supposing the <code>aes_ecb_decrypt</code> function does indeed perform a decryption operation, a reasonable starting point would be to assume that the data at address <code>0x48ae</code> is a 16, 24, or 32-byte key.</p>
 
+<h5>16 Byte Key</h5>
 <pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 <mark>7f78</mark>
 48b0: <mark>75e0 c977 d30c e85e ca19 d022 11f7</mark> 4b53
 48c0: 0b31 b5cd 58d3 f59d c5a9 c583 c4f3 6f1a
 </code></pre>
 
+<h5>24 Byte Key</h5>
 <pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 <mark>7f78</mark>
 48b0: <mark>75e0 c977 d30c e85e ca19 d022 11f7 4b53</mark>
 48c0: <mark>0b31 b5cd 58d3</mark> f59d c5a9 c583 c4f3 6f1a
 </code></pre>
 
+<h5>32 Byte Key</h5>
 <pre><code>48a0: 4343 4553 5320 4752 414e 5445 4400 <mark>7f78</mark>
 48b0: <mark>75e0 c977 d30c e85e ca19 d022 11f7 4b53</mark>
 48c0: <mark>0b31 b5cd 58d3 f59d c5a9 c583 c4f3</mark> 6f1a
@@ -340,7 +412,7 @@ b'<mark>ab5ee8d8adc30edf8e4bcef8908aade5</mark>'
 b'<mark>bb8b973d8b8627ba250fc061ff55faf4</mark>'
 </code></pre>
 
-<p>Unfortunately, all of these inputs have the same result:</p>
+<p>Unfortunately, all of these inputs have the same result.</p>
 
 <pre><code><xmp>SCAN SECURITY DEVICE
 SCAN SECURITY DEVICE
@@ -363,7 +435,7 @@ SCAN SECURITY DEVICE
 <mark>1224</mark>
 </code></pre>
 
-<p>On top of this, the data might be a series of little-endian 16-bit integers (which might require swapping every second byte before passing the key to the Python implementation), and the function name might not be accurate (i.e., it is decrypting rather than encrypting). Assuming the message might be 16, 24, or 32 bytes long, the number of possible combinations is as follows:</p>
+<p>On top of this, the data might be a series of little-endian 16-bit integers (which might require swapping every second byte before passing the key to the Python ECB function), and the function name might not be accurate (i.e., it is decrypting rather than encrypting). Assuming the message might be 16, 24, or 32 bytes long, the number of possible combinations is as follows.</p>
 
 <pre><code>&gt;&gt;&gt; combinations*(2**3)
 <mark>9792</mark>
@@ -420,7 +492,7 @@ The key size used for an AES cipher specifies the number of transformation round
 	</ol>
 
 <h2>Static Analysis</h2>
-<p>The flow control graph for the <code>aes_ecb_decrypt</code> function is as follows:</p>
+<p>The flow control graph for the <code>aes_ecb_decrypt</code> function is as follows.</p>
 <br>
       <figure>
         <img src="./images/baku-aes-ecb-decrypt-flow-control.png"
@@ -431,7 +503,7 @@ The key size used for an AES cipher specifies the number of transformation round
 
       <br>
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
-<span class="sidenote">The Ghidra decompiler has problems correctly inferring function signatures on the MSP430 ISA. Decompilation should be assumed to be far less accurate than usual on this ISA.</span>
+<span class="sidenote">The Ghidra decompiler has problems correctly inferring function signatures on the MSP430 ISA. Decompilation should be assumed to be far less accurate than usual on this architecture.</span>
 
 <br>
       <figure>
@@ -640,7 +712,7 @@ print(data.find(g))
 	      <cite>— Wikipedia</cite>
 	</blockquote>
 
-	<p>Assuming there are ten rounds (which seems to be the case), there should be eleven round keys that are 16 bytes long. The total length of an array containing these keys would be 176 bytes—the exact size of the data located before the start of the reverse SBOX. The hypothesis that this data is a round key array is supported by observing the runtime behavior of <code>aes_ecb_decrypt</code>:</p> 
+	<p>Assuming there are ten rounds (which seems to be the case), there should be eleven round keys that are 16 bytes long. The total length of an array containing these keys would be 176 bytes—the exact size of the data located before the start of the reverse SBOX. The hypothesis that this data is a round key array is supported by observing the runtime behavior of <code>aes_ecb_decrypt</code>.</p> 
 
 <pre><code>470a: mov	r10, r14
 470c: add	#0x10, r14
@@ -827,7 +899,7 @@ b'<mark>6e8cbcfc2f4ec33c47c6587da6547e15</mark>'
 
 <p>Encrypting the string <code>"ACCESS GRANTED!"</code> with the first 16-byte key in the array and supplying it at the I/O console should trigger the unlock interrupt.</p>
 
-<p>I/O console output:</p>
+<h5>I/O Console Output</h5>
 <pre><code><xmp>SCAN SECURITY DEVICE
 </xmp></code></pre>
 
@@ -868,7 +940,7 @@ b'<mark>6e8cbcfc2f4ec33c47c6587da6547e15</mark>'
 4a60: 0000 0000 0000 0000 0000 0000 0000 0000
 </code></pre>
 
-<p>Testing this theory can be accomplished with the following code in the Python REPL:</p>
+<p>Testing this theory can be accomplished with the following code in the Python REPL.</p>
 
 
 <pre><code><xmp>>>> binascii.hexlify(encrypt(data[160:176], b"ACCESS GRANTED!\x00"))
@@ -885,11 +957,11 @@ The CPU completed in 24284 cycles.</code></pre>
 
 <h2>Remediation</h2>
 
-<p>The core problem is that the developers used encryption when they should have used hashing. The Adobe breach is a famous example of this flaw. It is common in many systems, but there are two frequent variations:</p>
+<p>The core problem is that the developers used encryption when they should have used hashing. The Adobe breach is a famous example of this flaw. It is common in many systems, but there are two frequent variations.</p>
 
 <h5>1. Authentication.</h5>
 
-<p>Hardcoded symmetric encryption keys are insecure credentials for this variety of authentication. As demonstrated above, anyone can extract the key from firmware and reverse the operation to derive the original password. Conventional hashing algorithms or key derivation functions (KDFs) are significantly more secure alternatives, and—in both cases—passwords should also be unique per device.</p>
+<p>Hardcoded symmetric encryption keys are insecure credentials for this variety of authentication. As demonstrated above, anyone can extract the key from firmware and reverse the operation to derive the original password. Conventional hashing algorithms or key derivation functions (KDFs) are significantly more secure alternatives, although—in both cases—passwords must still be unique per device.</p>
 
 <h5>2. Encryption at rest.</h5>
 

@@ -79,15 +79,83 @@ A backend bug breaks the solve counters for Cold Lake and Churchill.
     <br>
     <b>Reading Time:</b> 12 minutes
 
+    <h5>Rendering Note:</h5>
+<p>There is a known issue with Android lacking a true monotype system font, which breaks many of the extended ASCII character set diagrams below. Please view this page on a Chrome or Firefox-based desktop browser to avoid rendering issues.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	Ideally on a Linux host.
+</span>
+
+    <h2>Executive Summary</h2>
 
     <p>The load address is signed, and the secure boot implementation has changed. Again, the goal is to circumvent the signature check to achieve arbitrary code execution.</p>
 
+    <h2>Background</h2>
+
+    <p>The following is a walkthrough for the fourth in the new series of Microcorruption challenges. The original CTF-turned-wargame was developed a decade ago by Matasano and centered around a deliberately vulnerable smart lock. The goal for each challenge was simple: write a software exploit to trigger an unlock.</p>
+
+    <p>NCC Group later acquired Matasano. They continued maintaining the wargame and added half a dozen new challenges on October 28<sup>th</sup>, 2022, of which this is one.</p>
+
+    <h2>System Architecture</h2>
+
+    <p>The emulated device runs on the MSP430 instruction set architecture. It uses a 16-bit little-endian processor and has 64 kilobytes of RAM. The <a href="https://microcorruption.com/public/manual.pdf">official manual</a> includes the details, but relevant functionality is summarized below.</p>
+
+    <h3>Interface</h3>
+    <p>Several separate windows control the debugger functionality.</p>
+
+    <br>
+      <figure>
+        <img src="./images/algiers/algiers-gui.png"
+          loading="eager" alt="Debugger GUI." />
+      </figure>
+
+      <p>A user input prompt like the following is the device's external communication interface.</p>
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-input-prompt.png"
+          loading="lazy" alt="Popup triggered by getsn interrupt." />
+      </figure>
+
+      <h3>Exploit Development Objective</h3>
+      <p>The equivalent of popping a shell on this system is calling interrupt <code>0x7F</code>. On earlier challenges in the series, there is a dedicated function called <code>unlock_door</code> that does this.</p>
+
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-unlock-door-function.png"
+          loading="lazy" alt="The unlock door function." />
+      </figure>
+
+      <p>Executing the following shellcode is functionally equivalent to calling the <code>unlock_door</code> function.</p>
+
+
+      <h5>Disassembly</h5>
+      <pre><code>3240 00ff      mov     #0xff00, sr
+b012 1000      call    #0x10
+</code></pre>
+
+      <h5>Assembly</h5>
+<pre><code>324000ffb0121000</code></pre>
+
+
+
+      <p>The following message is displayed in the interface when the interrupt is called successfully.</p>
+
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-unlock.png"
+          loading="lazy" alt="Unlock status message." />
+      </figure>
+
+<h2>High-Level Analysis</h2>
+<h3>Sample Payload</h3>
     <p>The debug payload is only one segment, and the load address is read big-endian. The example payload is below.</p>
 
 <pre><code class="asm">800000063041c26436953f8f3cadf1442fc218b185051ab6c20853a45f093fc32adf31529d05a5ec3e96a9e41ed9ad1b14dcbdb98e50e37a7ddc3d595b867807ed1605f2070e
 </code></pre>
 
-<p>Running the firmware with the example debug payload will produce the following output at the console:</p>
+<h3>Sample Output</h3>
+<p>Running the firmware with the example debug payload will produce the following output at the console.</p>
 
 <pre><code class="asm">Welcome to the secure program loader.
 Please enter debug payload.
@@ -97,8 +165,7 @@ Please enter debug payload.
 
 <p>The debug payload is successfully loaded to address <code>0x8000</code> and executes successfully.</p>
 
-<h2>High-Level Analysis</h2>
-
+<h3>Static Analysis</h3>
 <p>Even without understanding the exact workings, something is immediately interesting: there is now a call to the <code>sha512</code> function.</p>
 
 
@@ -117,9 +184,7 @@ Please enter debug payload.
           loading="lazy" alt="Main function flow control graph." />
       </figure>
 
-<p>The <code>sha512</code> function call is in conditional block <code>0x44c0</code>.</p>
-
-<p>It is reasonable to assume that the <code>sha512</code> function does compute a SHA512 checksum. After this call, two values that are exactly 64 bytes long—most likely two checksums—are compared using the <code>memcmp</code> function.</p>
+<p>The <code>sha512</code> function call is in conditional block <code>0x44c0</code>. It is reasonable to assume that the <code>sha512</code> function computes a SHA512 checksum. After this call, two values that are exactly 64 bytes long—most likely two checksums—are compared using the <code>memcmp</code> function.</p>
 
 <br>
 <hr>
@@ -206,7 +271,7 @@ Please enter debug payload.
 
       <h2>Dynamic Analysis</h2>
 
-      <p>The first step is to break at address <code>0x44c0</code>, provide the example debug payload as input, and see if execution reaches that conditional block. While the signature verification check passes, the program skips the block. The next question is how it parses the payload to determine which branch to take.</p>
+      <p>The first step is to break at address <code>0x44c0</code>, provide the example debug payload as input, and see if execution reaches the conditional block of interest. While the signature verification check passes, the program skips the block. The next question is how it parses the payload to determine which branch to take.</p>
  
       <p>The payload format is very similar to the one from St. John's. The signature section is 64 bytes long, suggesting it could be either a SHA512 checksum or an ed25519 signature.</p>
 
@@ -216,18 +281,19 @@ Please enter debug payload.
 
 <p>Aside from the signature changing (presumably because the developers rotated the leaked private key), the payload format is identical to the one from St. John's.</p>
 
-<p>Load address:</p>
+<h5>Load address</h5>
 <pre><code class="asm"><mark>8000</mark>00063041c26436953f8f3cadf1442fc218b185051ab6c20853a45f093fc32adf31529d05a5ec3e96a9e41ed9ad1b14dcbdb98e50e37a7ddc3d595b867807ed1605f2070e
 </code></pre>
 
-<p>Size:</p>
+<h5>Size</h5>
 <pre><code class="asm">800000<mark>06</mark>3041c26436953f8f3cadf1442fc218b185051ab6c20853a45f093fc32adf31529d05a5ec3e96a9e41ed9ad1b14dcbdb98e50e37a7ddc3d595b867807ed1605f2070e
 </code></pre>
 
-<p>Code:</p>
+<h5>Code</h5>
 <pre><code class="asm">80000006<mark>3041</mark>c26436953f8f3cadf1442fc218b185051ab6c20853a45f093fc32adf31529d05a5ec3e96a9e41ed9ad1b14dcbdb98e50e37a7ddc3d595b867807ed1605f2070e
 </code></pre>
 
+<h5>Unknown Byte</h5>
 <p>There is once again an unknown byte before the size field.</p>
 <pre><code class="asm">8000<mark>00</mark>063041c26436953f8f3cadf1442fc218b185051ab6c20853a45f093fc32adf31529d05a5ec3e96a9e41ed9ad1b14dcbdb98e50e37a7ddc3d595b867807ed1605f2070e
 </code></pre>
@@ -245,7 +311,7 @@ Please enter debug payload.
 
       <hr>
 
-      <p>The unknown byte is at address <code>0x2422</code>. The XREFs to that location are as follows:</p>
+      <p>The unknown byte is at address <code>0x2422</code>. The XREFs to that location are as follows.</p>
 
       <br>
       <figure>
@@ -304,9 +370,7 @@ Please enter debug payload.
 Please enter debug payload.
 </code></pre>
 
-<p>After verifying the relationship between the third byte in the payload and the <code>"Invalid signature type"</code> status message, the next question is how to make execution reach the call to <code>sha512</code>. Like the example payload, this one fails to hit the conditional block at address <code>0x44c0</code>.</p>
-
-<p>The conditional block that branches to 0x44c0 is below.</p>
+<p>The next question is how to make execution reach the call to <code>sha512</code>. Like the example payload, this one fails to hit the conditional block at address <code>0x44c0</code>. The conditional block that branches to address <code>0x44c0</code> is below.</p>
 
 <br>
 <hr>
@@ -316,7 +380,7 @@ Please enter debug payload.
       </figure>
       <hr>
 
-      <p>The signature type field was loaded into <code>R9</code> previously (at <code>0x4478</code>, just after the <code>getsn</code> call). Setting the signature type field to a value of 0x01 should cause this conditional check to pass.</p>
+      <p>The signature type field was loaded into <code>R9</code> previously. Setting the signature type field to a value of 0x01 should cause this conditional check to pass.</p>
 
 <pre><code>8000<mark>01</mark>063041c26436953f8f3cadf1442fc218b185051ab6c20853a45f093fc32adf31529d05a5ec3e96a9e41ed9ad1b14dcbdb98e50e37a7ddc3d595b867807ed1605f2070e</code></pre>
 
@@ -328,7 +392,7 @@ Please enter debug payload.
           loading="lazy" alt="Execution reaches the call to SHA512." />
       </figure>
 
-<p>Continuing execution prints the following messages to the console:</p>
+<p>Continuing execution prints the following messages to the console.</p>
 
 <pre><code>Welcome to the secure program loader.
 Please enter debug payload.
@@ -347,7 +411,7 @@ Please enter debug payload.
           loading="lazy" alt="Break at the call to SHA512." />
       </figure>
 
-<p>The register state at this point in execution is as follows:</p> 
+<p>The register state at this point in execution is as follows.</p> 
 
 <pre><code>pc  44c8  sp 43c0  sr 0003  cg 0000
 r04 0000 r05 5a08 r06 0000 r07 0000 
@@ -372,7 +436,7 @@ r12 4400 <mark>r13 43c0 r14 0006 r15 2420</mark>
           <tr>
                   <td>r13</td>
                   <td>Return Value</td>
-                  <td><code>byte *</code></td>
+                  <td><code>int *</code></td>
           </tr>
           <tr>
                   <td>r14</td>
@@ -382,7 +446,7 @@ r12 4400 <mark>r13 43c0 r14 0006 r15 2420</mark>
           <tr>
                   <td>r15</td>
                   <td>Data</td>
-                  <td><code>byte *</code></td>
+                  <td><code>char *</code></td>
           </tr>
         </tbody>
       </table>
@@ -464,12 +528,7 @@ r12 4400 <mark>r13 43c0 r14 0006 r15 2420</mark>
 └───────┴───────────────────────────────────────┘
 </code></pre>
 
-<p>This data is the SHA512 checksum of all fields in the payload except for the signature (i.e., only the first six bytes).</p>
-
-
-<pre><code><mark>800001063041</mark>c26436953f8f3cadf1442fc218b185051ab6c20853a45f093fc32adf31529d05a5ec3e96a9e41ed9ad1b14dcbdb98e50e37a7ddc3d595b867807ed1605f2070e</code></pre>
-
-<p>Confirming that the checksum is correct can be accomplished using the following Python code:</p>
+<p>This data is the SHA512 checksum of the first six bytes in the payload. Confirming that the checksum is correct can be accomplished using the following Python code.</p>
 
 <pre><code>python3
 &gt;&gt;&gt; import binascii
@@ -488,7 +547,7 @@ b'<mark>7d11c6bfae642cbc36a5cd747b744427a0852f4e89ca1b9fc3b22a85c2495612bae75246
       </figure>
       <hr>
 
-<p>The register state at this point in execution is as follows:</p> 
+<p>The register state at this point in execution is as follows.</p> 
 
 <pre><code>pc  44d4  sp 43c0  sr 0000  cg 0000
 r04 0000 r05 5a08 r06 0000 r07 0000 
@@ -496,7 +555,7 @@ r08 2426 r09 0001 r10 0006 r11 8000
 r12 4400 <mark>r13 0040 r14 2426 r15 43c0</mark> 
 </code></pre>
 
-<p>The conjectured calling convention for <code>memcmp</code> is straightforward:</p>
+<p>The conjectured calling convention for <code>memcmp</code> is straightforward.</p>
 
 <br>
       <table>
@@ -517,12 +576,12 @@ r12 4400 <mark>r13 0040 r14 2426 r15 43c0</mark>
           <tr>
                   <td>r14</td>
                   <td>Memory Area 1</td>
-                  <td><code>byte *</code></td>
+                  <td><code>char *</code></td>
           </tr>
           <tr>
                   <td>r15</td>
                   <td>Memory Area 2</td>
-                  <td><code>byte *</code></td>
+                  <td><code>char *</code></td>
           </tr>
         </tbody>
       </table>
@@ -590,7 +649,7 @@ r12 4400 <mark>r13 0040 r14 2426 r15 43c0</mark>
 
       <h2>SHA512 Is Not A DSA</h2>
 
-      <p>The above behavior constitutes a logical vulnerability that essentially boils down to security through obscurity. The algorithm verifies that the data has not been corrupted by calculating the checksum of the data and comparing it to the checksum in the payload signature field, but <em>it has no way of verifying that the payload comes from a trusted party</em>. Hashing is incorrectly used instead of signing. The <code>"Incorrect signature type"</code> message is misleading: the implementation does not toggle between two digital signature algorithms (DSAs) because SHA512 is not a DSA.</p>
+      <p>The above behavior constitutes a logical vulnerability that essentially boils down to security through obscurity. The algorithm verifies that the data has not been corrupted by calculating the checksum of the data and comparing it to the checksum in the payload signature field, but it has no way of verifying that the payload comes from a trusted party. Hashing is incorrectly used instead of signing. The <code>"Incorrect signature type"</code> message is misleading: the implementation does not toggle between two digital signature algorithms (DSAs) because SHA512 is not a DSA.</p>
 
       <h2>Exploitation</h2>
       <p>Developing a working attack is conceptually simple. First, create a valid load address, set the signature type to 0x01, reuse the portable shellcode, and set the size field appropriately. Concatenate all of this data into a single byte string, then calculate the SHA512 checksum of that byte string in Python and append it to the end of the payload.</p>
@@ -627,11 +686,12 @@ r12 4400 <mark>r13 0040 r14 2426 r15 43c0</mark>
 b'80a0ca7614b653247b207a739e8a5445bfc34f755d4bd0bd413ec5f65a748fe04f9488f7e10700b5bfb57f41ba56f2a314a0f9545b74d08764af7a5c0cfc40ec'
 </xmp></code></pre>
 
-      <p>The final payload is as follows:</p>
 
+<h5>Final Payload</h5>
       <pre><code>8000010c324000ffb012100080a0ca7614b653247b207a739e8a5445bfc34f755d4bd0bd413ec5f65a748fe04f9488f7e10700b5bfb57f41ba56f2a314a0f9545b74d08764af7a5c0cfc40ec</code></pre>
 
-      <p>When provided as an input, the console prints the following:</p>
+<h5>Result</h5>
+<p>When provided as an input, the console prints the following.</p>
 
 <pre><code>Welcome to the secure program loader.
 Please enter debug payload.
@@ -644,7 +704,7 @@ Please enter debug payload.
 
       <h2>Debugging</h2>
 
-      <p>The error is unusual, as this should be a relatively straightforward operation. The checksum provided in the payload matches the one calculated by the firmware, which is verifiable by inspecting the stack just after the return from <code>sha512</code>:</p>
+      <p>The error is unusual, as this should be a relatively straightforward operation. The checksum provided in the payload matches the one calculated by the firmware, which is verifiable by inspecting the stack just after the return from <code>sha512</code>.</p>
 
       <pre><code>
 43c0: <mark>80a0 ca76 14b6 5324 7b20 7a73 9e8a 5445</mark>
@@ -701,7 +761,7 @@ RETURN VALUE
       <pre><code>...14a0f9545b74d08764af7a5c0cfc40<mark>ec</mark></code></pre>
 
 
-      <p>The above snippet highlights the last byte (0xEC). Changing that byte to 0xED or 0xEB results in the following payloads:</p>
+      <p>The above snippet highlights the last byte (<code>0xEC</code>). Changing that byte to <code>0xED</code> or <code>0xEB</code> results in the following payloads.</p>
 
       <pre><code>...14a0f9545b74d08764af7a5c0cfc40<mark>ed</mark></code></pre>
       <pre><code>...14a0f9545b74d08764af7a5c0cfc40<mark>eb</mark></code></pre>
@@ -713,7 +773,7 @@ Please enter debug payload.
 Signature valid, executing payload
 </code></pre>
 
-<h5>Final payload:</h5>
+<h5>Final Payload</h5>
       <pre><code>8000010c324000ffb012100080a0ca7614b653247b207a739e8a5445bfc34f755d4bd0bd413ec5f65a748fe04f9488f7e10700b5bfb57f41ba56f2a314a0f9545b74d08764af7a5c0cfc40<mark>eb</mark></code></pre>
 
 
@@ -721,7 +781,7 @@ Signature valid, executing payload
 The CPU completed in 22073 cycles.</code></pre>
 
 <h2>Alternate Approaches</h2>
-<p>There is no restriction dictating that the last byte specifically must be modified. Recall that <code>memcmp</code> returns the difference for <em>the first pair of mismatched bytes</em>, which means that it is possible to have a checksum in the signature section of the payload that is only a single byte. For example, the following payload results in arbitrary code execution:</p> 
+<p>There is no restriction dictating that the last byte specifically must be modified. Recall that <code>memcmp</code> returns the difference for <em>the first pair of mismatched bytes</em>, which means that it is possible to have a checksum in the signature section of the payload that is only a single byte. For example, the following payload results in arbitrary code execution.</p> 
 
       <pre><code>8000010c324000ffb0121000<mark>7f</mark></code></pre>
 
@@ -729,7 +789,7 @@ The CPU completed in 22073 cycles.</code></pre>
 
 <h2>Remediation</h2>
 
-<p>The core issue is that neither SHA512 nor any other cryptographic checksum is safe to treat as equivalent to a digital signature. The current implementation prevents accidental corruption of the payload during transmission, but it does guarantee that it cannot be tampered with by malicious parties. While there are two potential fixes, only the first should be considered under ideal circumstances (the second is a suboptimal design).</p>
+<p>The core issue is that neither SHA512 nor any other cryptographic checksum is safe to treat as equivalent to a digital signature. The current implementation prevents accidental corruption of the payload during transmission, but it does not guarantee that malicious parties cannot tamper with it. While there are two potential fixes, only the first should be considered under ideal circumstances (the second is a suboptimal design).</p>
 
 <h5>1. Use a real DSA.</h5>
 <p>SHA512 is not a DSA. The best solution would be to revert to the Cold Lake firmware and implement the fixes suggested in the remediation section of that write-up.</p>
@@ -738,14 +798,8 @@ The CPU completed in 22073 cycles.</code></pre>
 
 <p>It is possible for checksum comparison to provide an equivalent level of security to a digital signature: the firmware could have a whitelist of hashes for debug payloads that it will accept. This solution comes with the caveat that it is impossible to update the whitelist without needing a firmware update for every device in the field.</p>
 
-<p>This approach only works if it follows on the heels of a patch for the incorrect conditional check. Otherwise, it is possible to generate partial SHA512 collisions<label for="sn-2" class="sidenote-toggle sidenote-number"></label>
 
-<input type="checkbox" id="sn-2" class="sidenote-toggle" />
-<span class="sidenote">This approach might technically be a partial second-preimage attack.</span>
-
-that will cause it to pass. Even with a hardcoded hash whitelist, it is possible to craft a payload such that the first byte of the payload checksum is 0x1 off from the first byte of the whitelisted checksum. Such an exploit requires appending a few extra random bytes to the end of the shellcode.</p>
-
-<p>Suppose, for example, that there is a whitelisted SHA512 checksum that begins with the byte 0xFE. The payload to generate the collision is as follows:</p>
+<p>Even with a hardcoded hash whitelist, it is possible to craft a payload such that the first byte of the payload checksum is 0x1 off from the first byte of the whitelisted checksum. Such an exploit requires appending a few extra random bytes to the end of the shellcode. Suppose, for example, that there is a whitelisted SHA512 checksum that begins with the byte 0xFE. The payload to generate the collision is as follows:</p>
 
 <br>
       <table>
@@ -774,6 +828,5 @@ that will cause it to pass. Even with a hardcoded hash whitelist, it is possible
 
       <p>The collision bytes should be brute-forced until the checksum for the payload begins with 0xFF, at which point it will pass the conditional check and result in arbitrary code execution—even with a whitelist.</p> 
 
-      <p>Thus, a proper patch requires including a hardcoded whitelist of approved payload hashes and fixing the check at <code>0x44fa</code> to execute arbitrary code only if the <code>memcmp</code> return value is zero.</p>
-
+      <p>Thus, a proper patch requires including a hardcoded whitelist of approved payload hashes and fixing the check at <code>0x44fa</code> to execute arbitrary code only if the <code>memcmp</code> return value is zero. Otherwise, it is possible to generate partial SHA512 collisions that will cause the check to pass.</p>
 </body></html>
