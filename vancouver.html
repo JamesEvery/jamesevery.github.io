@@ -92,7 +92,7 @@ Welcome to the Wasteland: A Case Study in the Perils of Security Through Obscuri
       <br>
       <figure>
         <img src="./images/algiers/algiers-input-prompt.png"
-          loading="lazy" alt="Popup triggered by getsn interrupt." />
+          loading="eager" alt="Popup triggered by getsn interrupt." />
       </figure>
 
       <h3>Exploit Development Objective</h3>
@@ -101,7 +101,7 @@ Welcome to the Wasteland: A Case Study in the Perils of Security Through Obscuri
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock-door-function.png"
-          loading="lazy" alt="The unlock door function." />
+          loading="eager" alt="The unlock door function." />
       </figure>
 
       <p>Executing the following shellcode is functionally equivalent to calling the <code>unlock_door</code> function.</p>
@@ -120,7 +120,7 @@ b012 1000      call    #0x10
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock.png"
-          loading="lazy" alt="Unlock status message." />
+          loading="eager" alt="Unlock status message." />
       </figure>
 
 <h2>High-Level Analysis</h2>
@@ -145,7 +145,7 @@ Executing debug payload
 
       <figure>
         <img src="./images/vancouver-flow-control.png"
-          loading="lazy" alt="Ghidra flow control graph for the main function." />
+          loading="eager" alt="Ghidra flow control graph for the main function." />
       </figure>
 
       <p>Observing the string printed by each conditional block allows the deduction of its purpose.</p>
@@ -194,7 +194,7 @@ Executing debug payload
 <hr>
       <figure>
         <img src="./images/vancouver-block-4446.png"
-          loading="lazy" alt="Conditional block 4446." />
+          loading="eager" alt="Conditional block 4446." />
       </figure>
       <hr>
 
@@ -206,7 +206,7 @@ Executing debug payload
 <hr>
       <figure>
         <img src="./images/vancouver-getsn.png"
-          loading="lazy" alt="Getsn parameters." />
+          loading="eager" alt="Getsn parameters." />
       </figure>
       <hr>
 
@@ -217,7 +217,7 @@ Executing debug payload
 <hr>
       <figure>
         <img src="./images/vancouver-register-indirect-call.png"
-          loading="lazy" alt="Register indirect call." />
+          loading="eager" alt="Register indirect call." />
       </figure>
       <hr>
 
@@ -232,7 +232,7 @@ Executing debug payload
 <hr>
       <figure>
         <img src="./images/vancouver-conditional-jump.png"
-          loading="lazy" alt="Conditional jump." />
+          loading="eager" alt="Conditional jump." />
       </figure>
       <hr>
 
@@ -242,7 +242,7 @@ Executing debug payload
 <hr>
       <figure>
         <img src="./images/vancouver-size-field-parsing-step.png"
-          loading="lazy" alt="Size field parsing step." />
+          loading="eager" alt="Size field parsing step." />
       </figure>
       <hr>
 
@@ -256,7 +256,7 @@ Executing debug payload
 <hr>
       <figure>
         <img src="./images/vancouver-failing-branch.png"
-          loading="lazy" alt="Failing conditional branch." />
+          loading="eager" alt="Failing conditional branch." />
       </figure>
 
       <p>This byte must represent the payload length, which the check requires to be 0x2 or higher.</p>
@@ -269,7 +269,7 @@ Executing debug payload
 <hr>
       <figure>
         <img src="./images/vancouver-load-address-parsing.png"
-          loading="lazy" alt="Load address parsing." />
+          loading="eager" alt="Load address parsing." />
       </figure>
       <hr>
 
@@ -311,7 +311,7 @@ The last two bytes must be the executable segment contents—in this case, a sin
 <hr>
       <figure>
         <img src="./images/vancouver-memcpy-parameters.png"
-          loading="lazy" alt="Memcpy parameters." />
+          loading="eager" alt="Memcpy parameters." />
       </figure>
       <hr>
 
@@ -415,7 +415,7 @@ b012 a844      call    #0x44a8
       <br>
       <figure>
         <img src="./images/vancouver-main-decompilation.png"
-          loading="lazy" alt="Ghidra decompilation for the main function." />
+          loading="eager" alt="Ghidra decompilation for the main function." />
       </figure>
       <br>
 

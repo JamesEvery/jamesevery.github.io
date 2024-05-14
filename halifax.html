@@ -130,7 +130,7 @@
       <br>
       <figure>
         <img src="./images/algiers/algiers-input-prompt.png"
-          loading="lazy" alt="Popup triggered by getsn interrupt." />
+          loading="eager" alt="Popup triggered by getsn interrupt." />
       </figure>
 
       <h3>Exploit Development Objective</h3>
@@ -139,7 +139,7 @@
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock-door-function.png"
-          loading="lazy" alt="The unlock door function." />
+          loading="eager" alt="The unlock door function." />
       </figure>
 
       <p>Executing the following shellcode is functionally equivalent to calling the <code>unlock_door</code> function.</p>
@@ -160,7 +160,7 @@ b012 1000      call    #0x10
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock.png"
-          loading="lazy" alt="Unlock status message." />
+          loading="eager" alt="Unlock status message." />
       </figure>
 
 <h2>High-Level Analysis</h2>
@@ -190,7 +190,7 @@ Please enter debug payload.
 <br>
       <figure>
         <img src="./images/halifax-execution-reaches-8000.png"
-          loading="lazy" alt="Execution reaches address 8000." />
+          loading="eager" alt="Execution reaches address 8000." />
       </figure>
 
 
@@ -230,7 +230,7 @@ Any payload is allowed,  because the unlock key must be passed to the new interr
 
       <figure>
          <img src="./images/halifax-main-flow-control.png"
-          loading="lazy" alt="Main function flow control graph." />
+          loading="eager" alt="Main function flow control graph." />
       </figure>
 
       <h3>Missing Signature Verification</h3>
@@ -251,7 +251,7 @@ suggests that the debug payload lacks signature verification. This vulnerability
 <br>
       <figure>
         <img src="./images/halifax-execution-reaches-8000-2.png"
-          loading="lazy" alt="Execution reaches address 8000." />
+          loading="eager" alt="Execution reaches address 8000." />
       </figure>
 
       <h3>Inconsistent Internal SRAM Hash</h3>
@@ -383,7 +383,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
 <br>
       <figure>
         <img src="./images/vancouver-hardware.png"
-          loading="lazy" alt="Vancouver hardware architecture." />
+          loading="eager" alt="Vancouver hardware architecture." />
       </figure>
 
       <p>The deadbolt is assumed to be an electromechanical device that performs some physical action when supplied with voltage. Control over this action is equivalent to owning the system. Successfully triggering the unlock interrupt from software most likely causes the processor to pull a GPIO pin high, thus supplying voltage to the deadbolt and causing it to retract.</p>
@@ -393,7 +393,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
 <br>
       <figure>
         <img src="./images/hanoi-hardware.png"
-          loading="lazy" alt="Vancouver hardware architecture." />
+          loading="eager" alt="Vancouver hardware architecture." />
       </figure>
 
       <p>Communications between the MCU and HSM occur over a serial line (or similar). This version of the HSM has no way to trigger the unlock directly, relying instead on the MCU to implement that logic. The hardware architecture of this system is flawed because an attacker with arbitrary code execution on the MCU can ignore the HSM.</p>
@@ -404,7 +404,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
       <br>
       <figure>
         <img src="./images/whitehorse-hardware.png"
-          loading="lazy" alt="Whitehorse hardware architecture." />
+          loading="eager" alt="Whitehorse hardware architecture." />
       </figure>
 
       <p>The flaw in the above design is that there is no redundancy. An attacker only needs to exploit one processor to supply voltage to the deadbolt and can safely ignore the other chip.</p>
@@ -419,7 +419,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
 
       <figure>
         <img src="./images/halifax-hardware.png"
-          loading="lazy" alt="Halifax hardware architecture." />
+          loading="eager" alt="Halifax hardware architecture." />
       </figure>
 
 
@@ -445,14 +445,14 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
       <br>
       <figure>
         <img src="./images/msp-430-manual-eint.png"
-          loading="lazy" alt="MSP430 manual (EINT/DINT instructions)." />
+          loading="eager" alt="MSP430 manual (EINT/DINT instructions)." />
       </figure>
 
       <br>
 
       <figure>
         <img src="./images/msp-430-manual-legend.png"
-          loading="lazy" alt="MSP430 manual legend." />
+          loading="eager" alt="MSP430 manual legend." />
       </figure>
 
       <p>Attempting to assemble either of these instructions using the provided assembler results in an error:</p>
@@ -480,7 +480,7 @@ The assembler accepts the mnemonic of the emulated instruction, and inserts the 
 
       <figure>
         <img src="./images/msp-430-emulated-to-core-table.png"
-          loading="lazy" alt="Short form of emulated instructions." />
+          loading="eager" alt="Short form of emulated instructions." />
       </figure>
 
       <p>The third and fourth lines from the bottom indicate the core instructions equivalent to the emulated <code>DINT</code> and <code>EINT</code> instructions.</p>
@@ -570,7 +570,7 @@ b012 1000      call	#0x10
 
       <figure>
          <img src="./images/halifax-main-flow-control.png"
-          loading="lazy" alt="Main function flow control graph." />
+          loading="eager" alt="Main function flow control graph." />
       </figure>
 
       <p>Observing the string printed by each conditional block allows the deduction of its purpose.</p>
@@ -741,7 +741,7 @@ unlock by providing the 16 byte key to 0x41 interrupt
 <hr>
       <figure>
          <img src="./images/halifax-sha256-internal-parameters.png"
-          loading="lazy" alt="Halifax sha256_internal parameters." />
+          loading="eager" alt="Halifax sha256_internal parameters." />
       </figure>
 <hr>
 
@@ -787,7 +787,7 @@ unlock by providing the 16 byte key to 0x41 interrupt
 <hr>
       <figure>
          <img src="./images/halifax-sha256-internal-parameters-2.png"
-          loading="lazy" alt="Halifax sha256_internal parameters." />
+          loading="eager" alt="Halifax sha256_internal parameters." />
       </figure>
 <hr>
 
@@ -801,7 +801,7 @@ r12 4400 r13 43e0 <mark>r14 1000 r15 0000</mark>
 <br>
       <figure>
          <img src="./images/halifax-exceeded-sram-length.png"
-          loading="lazy" alt="Halifax sha256_internal parameters." />
+          loading="eager" alt="Halifax sha256_internal parameters." />
       </figure>
 
 <p>This string is not defined anywhere in the program memory and prints to the debugger console rather than the I/O console.</p>
@@ -954,7 +954,7 @@ b'96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7'
 
       <figure>
         <img src="./images/halifax-sha256-print.png"
-          loading="lazy" alt="Loop that prints the SHA256 hash to the I/O console." />
+          loading="eager" alt="Loop that prints the SHA256 hash to the I/O console." />
       </figure>
       <hr>
 

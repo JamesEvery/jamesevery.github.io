@@ -114,7 +114,7 @@ A backend bug breaks the solve counters for Cold Lake and Churchill.
       <br>
       <figure>
         <img src="./images/algiers/algiers-input-prompt.png"
-          loading="lazy" alt="Popup triggered by getsn interrupt." />
+          loading="eager" alt="Popup triggered by getsn interrupt." />
       </figure>
 
       <h3>Exploit Development Objective</h3>
@@ -123,7 +123,7 @@ A backend bug breaks the solve counters for Cold Lake and Churchill.
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock-door-function.png"
-          loading="lazy" alt="The unlock door function." />
+          loading="eager" alt="The unlock door function." />
       </figure>
 
       <p>Executing the following shellcode is functionally equivalent to calling the <code>unlock_door</code> function.</p>
@@ -144,7 +144,7 @@ b012 1000      call    #0x10
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock.png"
-          loading="lazy" alt="Unlock status message." />
+          loading="eager" alt="Unlock status message." />
       </figure>
 
 <h2>High-Level Analysis</h2>
@@ -173,7 +173,7 @@ Please enter debug payload.
 <br>
       <figure>
         <img src="./images/churchill-call-tree.png"
-          loading="lazy" alt="Function call tree." />
+          loading="eager" alt="Function call tree." />
       </figure>
 
       <p>Examining the flow control graph for the <code>main</code> provides more context for why this call exists.</p>
@@ -181,7 +181,7 @@ Please enter debug payload.
 <br>
       <figure>
         <img src="./images/churchill-main-flow-control.png"
-          loading="lazy" alt="Main function flow control graph." />
+          loading="eager" alt="Main function flow control graph." />
       </figure>
 
 <p>The <code>sha512</code> function call is in conditional block <code>0x44c0</code>. It is reasonable to assume that the <code>sha512</code> function computes a SHA512 checksum. After this call, two values that are exactly 64 bytes long—most likely two checksums—are compared using the <code>memcmp</code> function.</p>
@@ -190,7 +190,7 @@ Please enter debug payload.
 <hr>
       <figure>
         <img src="./images/churchill-checksum-memcmp.png"
-          loading="lazy" alt="Memcmp call after SHA512." />
+          loading="eager" alt="Memcmp call after SHA512." />
       </figure>
       <hr>
 
@@ -200,7 +200,7 @@ Please enter debug payload.
 <hr>
       <figure>
         <img src="./images/churchill-checksum-conditional-jump.png"
-          loading="lazy" alt="Conditional check after memcmp." />
+          loading="eager" alt="Conditional check after memcmp." />
       </figure>
 <hr>
 
@@ -210,7 +210,7 @@ Please enter debug payload.
 <hr>
       <figure>
         <img src="./images/churchill-target-conditional.png"
-          loading="lazy" alt="Target conditional." />
+          loading="eager" alt="Target conditional." />
       </figure>
       <hr>
 
@@ -306,7 +306,7 @@ Please enter debug payload.
 <hr>
       <figure>
         <img src="./images/churchill-getsn-call.png"
-          loading="lazy" alt="Getsn call and read address." />
+          loading="eager" alt="Getsn call and read address." />
       </figure>
 
       <hr>
@@ -316,7 +316,7 @@ Please enter debug payload.
       <br>
       <figure>
         <img src="./images/churchill-unknown-byte-xref.png"
-          loading="lazy" alt="Unknown byte read." />
+          loading="eager" alt="Unknown byte read." />
       </figure>
 
       <br>
@@ -327,7 +327,7 @@ Please enter debug payload.
 <hr>
       <figure>
         <img src="./images/churchill-signature-type-check.png"
-          loading="lazy" alt="Signature type load." />
+          loading="eager" alt="Signature type load." />
       </figure>
       <hr>
 
@@ -376,7 +376,7 @@ Please enter debug payload.
 <hr>
       <figure>
         <img src="./images/churchill-signature-type-jump.png"
-          loading="lazy" alt="Signature type check/jump." />
+          loading="eager" alt="Signature type check/jump." />
       </figure>
       <hr>
 
@@ -389,7 +389,7 @@ Please enter debug payload.
 <br>
       <figure>
         <img src="./images/churchill-execution-reaches-sha512.png"
-          loading="lazy" alt="Execution reaches the call to SHA512." />
+          loading="eager" alt="Execution reaches the call to SHA512." />
       </figure>
 
 <p>Continuing execution prints the following messages to the console.</p>
@@ -408,7 +408,7 @@ Please enter debug payload.
 <br>
       <figure>
         <img src="./images/churchill-pre-sha512-state.png"
-          loading="lazy" alt="Break at the call to SHA512." />
+          loading="eager" alt="Break at the call to SHA512." />
       </figure>
 
 <p>The register state at this point in execution is as follows.</p> 
@@ -543,7 +543,7 @@ b'<mark>7d11c6bfae642cbc36a5cd747b744427a0852f4e89ca1b9fc3b22a85c2495612bae75246
 <hr>
       <figure>
         <img src="./images/churchill-checksum-memcmp.png"
-          loading="lazy" alt="Memcmp call after SHA512." />
+          loading="eager" alt="Memcmp call after SHA512." />
       </figure>
       <hr>
 
@@ -633,7 +633,7 @@ r12 4400 <mark>r13 0040 r14 2426 r15 43c0</mark>
 <hr>
       <figure>
         <img src="./images/churchill-second-memcmp.png"
-          loading="lazy" alt="Memcmp SHA512SUMS." />
+          loading="eager" alt="Memcmp SHA512SUMS." />
       </figure>
       <hr>
 
@@ -643,7 +643,7 @@ r12 4400 <mark>r13 0040 r14 2426 r15 43c0</mark>
 <hr>
       <figure>
         <img src="./images/churchill-target-conditional.png"
-          loading="lazy" alt="Target conditional." />
+          loading="eager" alt="Target conditional." />
       </figure>
       <hr>
 
@@ -719,7 +719,7 @@ Please enter debug payload.
 <hr>
       <figure>
         <img src="./images/churchill-second-memcmp.png"
-          loading="lazy" alt="Memcmp SHA512SUMS." />
+          loading="eager" alt="Memcmp SHA512SUMS." />
       </figure>
       <hr>
 

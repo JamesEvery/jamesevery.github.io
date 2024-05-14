@@ -109,7 +109,7 @@
       <br>
       <figure>
         <img src="./images/algiers/algiers-input-prompt.png"
-          loading="lazy" alt="Popup triggered by getsn interrupt." />
+          loading="eager" alt="Popup triggered by getsn interrupt." />
       </figure>
 
       <h3>Exploit Development Objective</h3>
@@ -118,7 +118,7 @@
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock-door-function.png"
-          loading="lazy" alt="The unlock door function." />
+          loading="eager" alt="The unlock door function." />
       </figure>
 
       <p>Executing the following shellcode is functionally equivalent to calling the <code>unlock_door</code> function.</p>
@@ -139,7 +139,7 @@ b012 1000      call    #0x10
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock.png"
-          loading="lazy" alt="Unlock status message." />
+          loading="eager" alt="Unlock status message." />
       </figure>
 
 
@@ -150,7 +150,7 @@ b012 1000      call    #0x10
 <br>
       <figure>
         <img src="./images/baku-main-flow-control.png"
-          loading="lazy" alt="Main function flow control graph." />
+          loading="eager" alt="Main function flow control graph." />
       </figure>
 
     <p>Running the firmware will produce the following output at the console.</p>
@@ -222,7 +222,7 @@ b012 1000      call    #0x10
 <br>
       <figure>
         <img src="./images/baku-int-call-tree.png"
-          loading="lazy" alt="Ghidra call tree for the interrupt call gate." />
+          loading="eager" alt="Ghidra call tree for the interrupt call gate." />
         </figcaption>
       </figure>
 </span>
@@ -302,7 +302,7 @@ b'AAAAAAAAAAAAAAAA'
 <br>
       <figure>
         <img src="./images/baku-second-parameter.png"
-	     loading="lazy" alt="Second parameter for aes_ecb_decrypt."/>
+	     loading="eager" alt="Second parameter for aes_ecb_decrypt."/>
       </figure>
 
 <p>The data at this location appears random, and it is not immediately clear how long it is.</p>
@@ -496,7 +496,7 @@ The key size used for an AES cipher specifies the number of transformation round
 <br>
       <figure>
         <img src="./images/baku-aes-ecb-decrypt-flow-control.png"
-		  loading="lazy" alt="Flow control graph for the aes_ecb_decrypt function."/>
+		  loading="eager" alt="Flow control graph for the aes_ecb_decrypt function."/>
       </figure>
 
       <p>One pattern to observe in the raw disassembly is the calls to the <code>aesdec128</code> function, of which there are nine. The decompilation below has these calls highlighted.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
@@ -508,7 +508,7 @@ The key size used for an AES cipher specifies the number of transformation round
 <br>
       <figure>
         <img src="./images/baku-aes-ecb-decrypt-decompilation.png"
-		  loading="lazy" alt="Flow control graph for the aes_ecb_decrypt function."/>
+		  loading="eager" alt="Flow control graph for the aes_ecb_decrypt function."/>
       </figure>
 
       <p>There is also a call to the <code>xor128</code> function just before that, which resembles the "initial round key addition" step.</p>
@@ -516,7 +516,7 @@ The key size used for an AES cipher specifies the number of transformation round
 <br>
       <figure>
         <img src="./images/baku-aes-ecb-decrypt-first-xor128.png"
-		  loading="lazy" alt="aes_ecb_decrypt: last xor128 call"/>
+		  loading="eager" alt="aes_ecb_decrypt: last xor128 call"/>
       </figure>
 
       <p>The "final round" step is not the same as the others because another iteration of AddRoundKey follows it, which implies that there should be another <code>xor128</code> call near the end of the function. That call is present on line 40, suggesting that the code from lines 18 to 40 constitutes the final round, bringing the total to ten.</p>
@@ -524,7 +524,7 @@ The key size used for an AES cipher specifies the number of transformation round
 <br>
       <figure>
         <img src="./images/baku-aes-ecb-decrypt-last-xor128.png"
-		  loading="lazy" alt="aes_ecb_decrypt: last xor128 call"/>
+		  loading="eager" alt="aes_ecb_decrypt: last xor128 call"/>
       </figure>
 
       <p>The presence of ten rounds suggests that the implementation uses 128-bit keys.</p>

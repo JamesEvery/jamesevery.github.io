@@ -92,7 +92,7 @@ A Stranger in Algiers:<br>The Psychology Behind Heap Exploitation Autodidacticis
     <br>
       <figure>
         <img src="./images/algiers/ret2systems-wargame-learning-curve.png"
-          loading="lazy" alt="Solves for p0ison3d challenge from DUCTF 2022." />
+          loading="eager" alt="Solves for p0ison3d challenge from DUCTF 2022." />
       </figure>
 
       <p>This phenomenon is easily verifiable in practice. Consider the following statistics.</p>
@@ -105,7 +105,7 @@ A Stranger in Algiers:<br>The Psychology Behind Heap Exploitation Autodidacticis
     <br>
       <figure>
         <img src="./images/algiers/ductf-p0ison3d-solves.png"
-          loading="lazy" alt="Solves for p0ison3d challenge from DUCTF 2022." />
+          loading="eager" alt="Solves for p0ison3d challenge from DUCTF 2022." />
       </figure>
 
       <p>Measured relative to the 1,182 significant teams, this suggests that 6% of them had heap exploitation skills of any kind. Compare this with one of the <a href="https://downunderctf.com/blog/2022/ctf-statistics/#family-tree">least-solved</a> binary exploitation challenges in the event.</p>
@@ -114,7 +114,7 @@ A Stranger in Algiers:<br>The Psychology Behind Heap Exploitation Autodidacticis
     <br>
       <figure>
         <img src="./images/algiers/ductf-family-tree-solves.png"
-          loading="lazy" alt="Solves for family tree challenge from DUCTF 2022." />
+          loading="eager" alt="Solves for family tree challenge from DUCTF 2022." />
       </figure>
 
     <p>Measured relative to the 1,182 significant teams, only 0.25% of them could exploit a custom allocator double-free vulnerability.</p>
@@ -126,7 +126,7 @@ A Stranger in Algiers:<br>The Psychology Behind Heap Exploitation Autodidacticis
     <br>
       <figure>
         <img src="./images/algiers/microcorruption-overall-progress.png"
-          loading="lazy" alt="Overall level progress for Microcorruption, circa May 13th, 2022." />
+          loading="eager" alt="Overall level progress for Microcorruption, circa May 13th, 2022." />
       </figure>
 
       <br>
@@ -192,7 +192,7 @@ These numbers span more than eight years, with step-by-step walkthroughs and vid
     <br>
       <figure>
         <img src="./images/algiers/microcorruption-overall-progress-historical.png"
-          loading="lazy" alt="Overall level progress for Microcorruption, circa April 2016." />
+          loading="eager" alt="Overall level progress for Microcorruption, circa April 2016." />
       </figure>
 
       <p>At this point, 1 in 7 significant users had solved level 14, and 1 in 25 had solved level 18. Based on these more conservative numbers, eighty-six percent of the population who can extract hard-coded credentials from firmware images cannot write heap exploits—even using old techniques with tailor-made writeups available.</p>
@@ -260,7 +260,7 @@ Like crossword puzzles, many security wargames have been designed to challenge u
       <br>
       <figure>
         <img src="./images/algiers/algiers-input-prompt.png"
-          loading="lazy" alt="Popup triggered by getsn interrupt." />
+          loading="eager" alt="Popup triggered by getsn interrupt." />
       </figure>
 
       <h3>Exploit Development Objective</h3>
@@ -269,7 +269,7 @@ Like crossword puzzles, many security wargames have been designed to challenge u
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock-door-function.png"
-          loading="lazy" alt="The unlock door function." />
+          loading="eager" alt="The unlock door function." />
       </figure>
 
       <p>Executing the following assembly is functionally equivalent to calling the <code>unlock_door</code> function.</p>
@@ -287,7 +287,7 @@ b012 1000      call    #0x10
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock.png"
-          loading="lazy" alt="Unlock status message." />
+          loading="eager" alt="Unlock status message." />
       </figure>
 
 
@@ -315,7 +315,7 @@ Username &gt;&gt;
 <br>
       <figure>
         <img src="./images/algiers-login-flow-control.png"
-          loading="lazy" alt="Algiers login function flow control graph." />
+          loading="eager" alt="Algiers login function flow control graph." />
       </figure>
 
 <h3>Static Analysis</h3>
@@ -324,7 +324,7 @@ Username &gt;&gt;
     <hr>
       <figure>
         <img src="./images/algiers/algiers-test-password-valid-success.png"
-          loading="lazy" alt="Call to unlock_door." />
+          loading="eager" alt="Call to unlock_door." />
       </figure>
     <hr>
 
@@ -365,7 +365,7 @@ Username &gt;&gt;
 <br>
       <figure>
         <img src="./images/hanoi-hardware.png"
-          loading="lazy" alt="Vancouver hardware architecture." />
+          loading="eager" alt="Vancouver hardware architecture." />
       </figure>
 
       <p>An online brute-force attack against an eight-to-sixteen-character password is infeasible, necessitating exploiting the HSM or achieving arbitrary code execution on the main MCU. The latter approach is the intended solution.</p>
@@ -378,7 +378,7 @@ Username &gt;&gt;
       <br>
       <figure>
         <img src="./images/algiers/algiers-input-prompt-with-dummy-data.png"
-          loading="lazy" alt="Junk data is supplied at the input prompt." />
+          loading="eager" alt="Junk data is supplied at the input prompt." />
       </figure>
 
 <p>Supplying 64 bytes of the non-printing character 0xAA provides a recognizable pattern that is discernable from a memory dump.</p>
@@ -386,7 +386,7 @@ Username &gt;&gt;
       <br>
       <figure>
         <img src="./images/algiers/algiers-dummy-data-in-memory.png"
-          loading="lazy" alt="Junk data in memory." />
+          loading="eager" alt="Junk data in memory." />
       </figure>
 
       <p>The implementation only reads 48 bytes into memory at the above location. The next step is to determine what data was originally there.
@@ -405,15 +405,15 @@ Username &gt;&gt;
 <div id="slides">
   <section id="memory-before-read">
         <img src="./images/algiers/algiers-memory-before-read.png"
-          loading="lazy" alt="Memory before read." />
+          loading="eager" alt="Memory before read." />
   </section>
   <section id="memory-after-username-read">
         <img src="./images/algiers/algiers-dummy-data-in-memory.png"
-          loading="lazy" alt="Junk username data in memory." />
+          loading="eager" alt="Junk username data in memory." />
   </section>
   <section id="memory-after-password-read">
         <img src="./images/algiers/algiers-memory-after-second-read.png"
-          loading="lazy" alt="Junk password data in memory." />
+          loading="eager" alt="Junk password data in memory." />
   </section>
 </div>
 <ul id="nav">
@@ -427,7 +427,7 @@ Username &gt;&gt;
       <br>
       <figure>
         <img src="./images/algiers/algiers-stack-location.png"
-          loading="lazy" alt="Algiers stack location."/>
+          loading="eager" alt="Algiers stack location."/>
       </figure>
 
 
@@ -450,7 +450,7 @@ Username &gt;&gt;
 <hr>
       <figure>
         <img src="./images/algiers/algiers-state-space.png"
-          loading="lazy" alt="State space." />
+          loading="eager" alt="State space." />
       </figure>
 
       <p>Anyone who has worked through the previous challenges in the series understands the behavior of <code>puts</code> and <code>getsn</code>. The <code>free</code> function, by process of elimination, must be the vulnerable one—a theory supported by examining the pointer passed to <code>free</code> in <code>R15</code>.</p>
@@ -458,7 +458,7 @@ Username &gt;&gt;
 <br>
       <figure>
         <img src="./images/algiers/algiers-break-at-free.png"
-          loading="lazy" alt="Breakpoints set before calls to free function." />
+          loading="eager" alt="Breakpoints set before calls to free function." />
       </figure>
 
       <p>Supply shorter test data on this iteration. Depending on the call, <code>R15</code> points to the start of the username or password buffer, near the six words noted earlier.</p>
@@ -467,11 +467,11 @@ Username &gt;&gt;
 <div id="slides">
   <section id="r15-free-1">
         <img src="./images/algiers/algiers-memory-free-1.png"
-          loading="lazy" alt="Memory before read." />
+          loading="eager" alt="Memory before read." />
   </section>
   <section id="r15-free-2">
         <img src="./images/algiers/algiers-memory-free-2.png"
-          loading="lazy" alt="Junk username data in memory." />
+          loading="eager" alt="Junk username data in memory." />
   </section>
 </div>
 <ul id="nav">
@@ -2032,7 +2032,7 @@ bbbb 0000 0000 0000 0000 0000 0000 0000
 <br>
       <figure>
         <img src="./images/algiers/algiers-free-return-instruction.png"
-          loading="lazy" alt="Return instruction in free call." />
+          loading="eager" alt="Return instruction in free call." />
       </figure>
 
 <p>The stack pointer at this point in execution is as follows.</p>
@@ -2040,7 +2040,7 @@ bbbb 0000 0000 0000 0000 0000 0000 0000
 <br>
       <figure>
         <img src="./images/algiers/algiers-free-return-address.png"
-          loading="lazy" alt="Return address for first free call." />
+          loading="eager" alt="Return address for first free call." />
       </figure>
 
       <p>The return address is the big-endian value <code>0x46a8</code>. The proof of concept will overwrite this value.</p>
@@ -2120,7 +2120,7 @@ bbbb 0000 0000 0000 0000 0000 0000 0000
 <br>
       <figure>
         <img src="./images/algiers/algiers-unlock.png"
-          loading="lazy" alt="Unlock status message." />
+          loading="eager" alt="Unlock status message." />
       </figure>
 
       <h4>Alternate Approach</h4>
@@ -2462,7 +2462,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 <br>
       <figure>
         <img src="./images/algiers/algiers-free-return-instruction.png"
-          loading="lazy" alt="Breakpoint at return instruction in free call." />
+          loading="eager" alt="Breakpoint at return instruction in free call." />
       </figure>
 
       <p>Stepping once reveals that execution successfully returns to the unlock_door function, but the exploit has corrupted the first two instructions in it.</p>
@@ -2470,7 +2470,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 <br>
       <figure>
         <img src="./images/algiers/algiers-unlock-door-overwritten.png"
-          loading="lazy" alt="Return instruction in free call." />
+          loading="eager" alt="Return instruction in free call." />
       </figure>
 
       <p>The random data that overwrote the original instructions disassembles to the following.</p>
@@ -3068,7 +3068,7 @@ The CPU completed in 7351 cycles.
 <br>
       <figure>
         <img src="./images/algiers-free-flow-control.png"
-          loading="lazy" alt="Flow control for the free function." />
+          loading="eager" alt="Flow control for the free function." />
       </figure>
 
 <p>
@@ -3265,7 +3265,7 @@ The CPU completed in 7351 cycles.
 <br>
       <figure>
         <img src="./images/algiers/algiers-arbitrary-write-instruction.png"
-          loading="lazy" alt="Instruction where arbitrary write occurs." />
+          loading="eager" alt="Instruction where arbitrary write occurs." />
       </figure>
       <hr>
 

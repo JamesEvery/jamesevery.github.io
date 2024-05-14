@@ -114,7 +114,7 @@
       <br>
       <figure>
         <img src="./images/algiers/algiers-input-prompt.png"
-          loading="lazy" alt="Popup triggered by getsn interrupt." />
+          loading="eager" alt="Popup triggered by getsn interrupt." />
       </figure>
 
       <h3>Exploit Development Objective</h3>
@@ -123,7 +123,7 @@
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock-door-function.png"
-          loading="lazy" alt="The unlock door function." />
+          loading="eager" alt="The unlock door function." />
       </figure>
 
       <p>Executing the following shellcode is functionally equivalent to calling the <code>unlock_door</code> function.</p>
@@ -144,7 +144,7 @@ b012 1000      call    #0x10
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock.png"
-          loading="lazy" alt="Unlock status message." />
+          loading="eager" alt="Unlock status message." />
       </figure>
 
 <h2>High-Level Analysis</h2>
@@ -156,7 +156,7 @@ b012 1000      call    #0x10
     <br>
       <figure>
         <img src="./images/tpm.png"
-          loading="lazy" alt="TPM based Secure Boot implementation on an x86 PC." />
+          loading="eager" alt="TPM based Secure Boot implementation on an x86 PC." />
       </figure>
       <p>A typical hardware TPM is a physical chip on the motherboard that is hardened against relatively sophisticated hardware attacks and connected to the processor via a low-speed bus. The BIOS boot block is located in a ROM chip and is physically impossible to alter via a software attack. This chip contains the first code that runs after turning on the system. As a simplified explanation, the BIOS boot block code will take a cryptographic checksum of the BIOS code (the section executed next) and send the resulting hash to the TPM. If the hash for the BIOS code does not match the one saved in the TPM, it will respond with a message informing the BIOS boot block that it should halt the boot process. This challenge-response protocol prevents attackers from modifying the BIOS code to insert malicious functionality.</p>
 
@@ -167,7 +167,7 @@ b012 1000      call    #0x10
       <br>
       <figure>
         <img src="./images/tpm-note.png"
-          loading="lazy" alt="TPM based Secure Boot implementation on an x86 PC (with annotation)" />
+          loading="eager" alt="TPM based Secure Boot implementation on an x86 PC (with annotation)" />
       </figure>
 
       <p>A reasonable assumption is that the "debug payload" is somewhat analogous to a kernel, and the goal is to replace it with a malicious version that circumvents the platform integrity checks implemented in the functionality that is analogous to an OS bootloader (the challenge firmware). Alternately, it might be one layer back (i.e., the firmware is similar to a BIOS, and the debug payload is the OS bootloader). Either way, these challenges involve exploiting a vulnerability in the previous stage to break the chain of trust.</p>
@@ -215,7 +215,7 @@ Please enter debug payload.
 <hr>
       <figure>
         <img src="./images/st-johns-size-parsing.png"
-          loading="lazy" alt="Load address parsing logic." />
+          loading="eager" alt="Load address parsing logic." />
       </figure>
       <hr>
 
@@ -242,7 +242,7 @@ Please enter debug payload.
 <br>
       <figure>
         <img src="./images/st-johns-execution-reaches-8000.png"
-          loading="lazy" alt="St. John's main function flow control graph." />
+          loading="eager" alt="St. John's main function flow control graph." />
       </figure>
 
 <p>Much like in Vancouver, the sample debug payload will immediately return, and the <code>main</code> function will loop. The inferred payload structure is thus as follows:</p>
@@ -366,7 +366,7 @@ Please enter debug payload.
 <br>
       <figure>
         <img src="./images/st-johns-flow-control.png"
-          loading="lazy" alt="St. John's main function flow control graph." />
+          loading="eager" alt="St. John's main function flow control graph." />
       </figure>
 
       <p>The program prints various status messages by calling <code>puts</code>. Examining the string that each conditional block prints allows for conjecture about its purpose.</p>
@@ -456,7 +456,7 @@ Please enter debug payload.
 <hr>
       <figure>
         <img src="./images/st-johns-incorrect-size.png"
-          loading="lazy" alt="Size field check in main function." />
+          loading="eager" alt="Size field check in main function." />
       </figure>
 <hr>
 
@@ -468,7 +468,7 @@ Please enter debug payload.
 
       <figure>
         <img src="./images/st-johns-unknown-byte-xrefs.png"
-          loading="lazy" alt="Size field check in main function." />
+          loading="eager" alt="Size field check in main function." />
       </figure>
 
       <h3>Attack Surface Analysis</h3>
@@ -523,7 +523,7 @@ std::cout << "Verified signature over message\n" << std::endl;
 <br>
       <figure>
         <img src="./images/st-johns-before-ed25519-call.png"
-          loading="lazy" alt="Before call to ed25519." />
+          loading="eager" alt="Before call to ed25519." />
       </figure>
 
 
@@ -538,7 +538,7 @@ r08 0000 r09 0000 r10 0006 <mark>r11 43b8</mark>
 <br>
       <figure>
         <img src="./images/st-johns-ed25519-parameters.png"
-          loading="lazy" alt="Parameters for ed25519." />
+          loading="eager" alt="Parameters for ed25519." />
       </figure>
 
 <p>Based on the ed25519 Wikipedia description, it is reasonable to assume that <code>R15</code> is a pointer to the public key. This data is exactly 32 bytes, as the 33rd would overlap the beginning of the debug payload (which is stored just after it in memory). <code>R14</code> contains a pointer to the debug payload (the message). <code>R13</code> is the message size. <code>R12</code> points to the signature (copied to the stack previously).</p>
@@ -645,7 +645,7 @@ This pattern suggests that <code>ed25519_verify</code> returns a boolean status 
 <hr>
       <figure>
         <img src="./images/st-johns-boolean-status-code.png"
-          loading="lazy" alt="Boolean signature verification pass check." />
+          loading="eager" alt="Boolean signature verification pass check." />
       </figure>
 <hr>
 
@@ -748,7 +748,7 @@ This pattern suggests that <code>ed25519_verify</code> returns a boolean status 
 <hr>
       <figure>
         <img src="./images/cyphr-me.png"
-          loading="lazy" alt="Cyphr.me interface." />
+          loading="eager" alt="Cyphr.me interface." />
       </figure>
 <hr>
 
@@ -758,7 +758,7 @@ This pattern suggests that <code>ed25519_verify</code> returns a boolean status 
 <hr>
       <figure>
         <img src="./images/churchill-cyphr-me-example.png"
-          loading="lazy" alt="Cyphr.me with data." />
+          loading="eager" alt="Cyphr.me with data." />
       </figure>
 <hr>
 
