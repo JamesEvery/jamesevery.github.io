@@ -68,7 +68,7 @@ A Stranger in Algiers:<br>The Psychology Behind Heap Exploitation Autodidacticis
 
     <a href="https://www.bleepingcomputer.com/news/security/one-year-after-wannacry-eternalblue-exploit-is-bigger-than-ever/">destroy more money</a> than the GDP of <a href="https://countryeconomy.com/gdp?year=2018">47 countries</a> and then
 
-    <a href="https://www.zerodium.com/images/zerodium_prices.png">sell it for a million dollars</a>, you will want to learn heap exploitation first.</p>
+    <a href="https://www.zerodium.com/images/zerodium_prices.png">sell it for a million dollars</a>, you will want to learn heap exploitation first. Given an embedded gray box heap implementation, this is how to go from a firmware dump to remote code execution without knowledge of the internals.</p>
 
 
     <h5>Rendering Note:</h5>
@@ -206,7 +206,7 @@ These numbers span more than eight years, with step-by-step walkthroughs and vid
       <p>There are very few good resources for learning introductory heap exploitation. Microcorruption is one of them. LiveOverflow's Binary Exploitation series is a helpful resource—specifically videos 0x13 and 0x14—and there is Phrack. Based on the above statistics, each of these resources lacks something.</p>
 
       <ol>
-	      <li>Learning heap exploitation from Phrack is like attempting to learn phonetic language from Linear B cuniform tablets.</li>
+	      <li>Learning heap exploitation from Phrack is like attempting to learn phonetic language from cuniform tablets.</li>
 	      <li>Watching LiveOverflow's binary exploitation series without the correct background is like watching a hyperactive mayfly on amphetamines.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
@@ -228,7 +228,7 @@ Like crossword puzzles, many security wargames have been designed to challenge u
 
 <h5>Reverse Engineering Embedded Heap Algorithms</h5>
 
-<p>What is the thought process required to develop a technique in the first place? How did someone discover the original dlmalloc unlink write primitive? Those are the questions this walkthrough will attempt to answer. Given an embedded gray box heap implementation, this is how to go from a firmware dump to remote code execution without knowledge of the internals.</p>
+<p>What is the thought process required to develop a technique in the first place? How would someone discover the original dlmalloc unlink write primitive? Those are the questions this walkthrough will answer.</p>
 
 <p></p>
 
@@ -264,13 +264,23 @@ Like crossword puzzles, many security wargames have been designed to challenge u
       </figure>
 
       <h3>Exploit Development Objective</h3>
-      <p>The equivalent of popping a shell on this system is calling the <code>unlock_door</code> function—injecting shellcode is unnecessary.</p>
+      <p>The equivalent of popping a shell on this system is calling the <code>unlock_door</code> function.</p>
 
       <br>
       <figure>
         <img src="./images/algiers/algiers-unlock-door-function.png"
           loading="lazy" alt="The unlock door function." />
       </figure>
+
+      <p>Executing the following assembly is functionally equivalent to calling the <code>unlock_door</code> function.</p>
+
+      <h5>Disassembly</h5>
+      <pre><code>3240 00ff      mov     #0xff00, sr
+b012 1000      call    #0x10
+</code></pre>
+
+<h5>Assembly</h5>
+<pre><code>324000ffb0121000</code></pre>
 
       <p>This results in the following message displaying in the interface.</p>
 
