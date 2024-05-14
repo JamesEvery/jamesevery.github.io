@@ -389,17 +389,14 @@ Username &gt;&gt;
           loading="eager" alt="Junk data in memory." />
       </figure>
 
-      <p>The implementation only reads 48 bytes into memory at the above location. The next step is to determine what data was originally there.
-      <label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+      <p>The implementation only reads 48 bytes into memory at the above location. The next step is to determine what data was originally there.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
 
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">
       Reset the debugger using the "reset" command, then type "continue." When the input prompt pops up, click the "wait" button.
 </span>
-      </p>
-
-      <p>The following slideshow depicts this memory region before the read, after sending the username, and after sending the password.</p>
+The following slideshow depicts this memory region before the read, after sending the username, and after sending the password.</p>
 
       <br>
 <div id="slides">
@@ -441,7 +438,7 @@ Username &gt;&gt;
 2440: 0000 0000 0000 0000 0000 0000 0000 0000   ................
 2450: *  </code></pre>
 
-<p>These are the data structures overwritten earlier via a buffer overflow. The challenge is thus as follows: redirect execution flow to the <code>unlock_door</code> function given control of these six words.</p>
+<p>The challenge is thus as follows: redirect execution flow to the <code>unlock_door</code> function given control of these six words.</p>
 
 <h3>Attack Surface</h3>
 <p>By definition, only code executed after reading user input can be vulnerable—which rules out half the code in the <code>login</code> function. The remaining blocks are of interest.</p>
@@ -919,7 +916,7 @@ bbbb 0000 0000 0000 0000 0000 0000 0000
 <h3>Runtime Analysis</h3>
 <h4>First Free Call</h4>
 
-<p>Observe what happens when the <code>login</code> function passes a password buffer pointer to <code>free</code>. The following memory location is in <code>R15</code>.</p>
+<p>Observe what happens when the <code>login</code> function passes a password buffer pointer to <code>free</code>. The highlighted memory location is in <code>R15</code>.</p>
 
 <pre><code class='language-ascii-noshadows'>    ┌────────┬────────┬────────┬──────┐
     │  2408  │  1000  │  0000  │ 0000 │
@@ -1367,9 +1364,7 @@ bbbb 0000 0000 0000 0000 0000 0000 0000
 └──────────────────┘
 </code></pre>
 
-<p>It is unclear what the algorithm is doing, so a minor alteration is initially preferable. There may be checks to see whether the value is within some range, so change the pointer to a nearby address. Consider what happens when setting the first word to a value within 256 bytes of the original location.</p>
-
-<p>Sending the following payload as the username accomplishes this.</p>
+<p>It is unclear what the algorithm is doing, so a minor alteration is initially preferable. There may be checks to see whether the value is within some range, so change the pointer to a nearby address. Consider what happens when setting the first word to a value within 256 bytes of the original location. Sending the following payload as the username accomplishes this.</p>
 
 <h5>Username:</h5>
 
@@ -2043,9 +2038,7 @@ bbbb 0000 0000 0000 0000 0000 0000 0000
           loading="eager" alt="Return address for first free call." />
       </figure>
 
-      <p>The return address is the big-endian value <code>0x46a8</code>. The proof of concept will overwrite this value.</p>
-
-      <p>The first overflowed word should be two bytes less than the address of the write target.</p>
+      <p>The return address is the big-endian value <code>0x46a8</code>. The proof of concept will overwrite this value. The first overflowed word should be two bytes less than the address of the write target.</p>
 
 <pre><code class='language-ascii-noshadows'>  ┌────────┬────────┬────────┬──────────────────────────┐
 ┌─┤  <mark>4392</mark>  │  ....  │  ....  │ .... .... .... .... .... │
@@ -2183,9 +2176,7 @@ The CPU completed in 7266 cycles.
 
 <h2>Refining The Technique</h2>
 
-<p>This exploit requires either two separate buffer overflows or one very large one. In this case, there were 48 bytes of overflow, but that is not always true. For example, a more plausible scenario is where a developer allocates 16 bytes and then reads 0x16 bytes (decimal 22) into that buffer. Supposing there was only a single six-byte overflow, this technique would not work.</p>
-
-<p>Ideally, it should be possible to use this same write primitive given control of only the following three words.</p>
+<p>This exploit requires either two separate buffer overflows or one very large one. In this case, there were 48 bytes of overflow, but that is not always true. For example, a more plausible scenario is where a developer allocates 16 bytes and then reads 0x16 bytes (decimal 22) into that buffer. Supposing there was only a single six-byte overflow, this technique would not work. Ideally, it should be possible to use this same write primitive given control of only the following three words.</p>
 
 <pre><code class='language-ascii-noshadows'>    ┌────────┬────────┬────────┬──────┐
     │  2408  │  1000  │  0000  │ 0000 │
@@ -2499,7 +2490,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 
 	<h3>Working Around The Problem</h3>
 
-	<p>Compare the corrupted instructions at the beginning of the <code>unlock_door</code> function with their initial opcodes.</p>
+	<p>Compare the corrupted instructions at the beginning of the <code>unlock_door</code> function with their original opcodes.</p>
 
 	<br>
 <div id="slides">
@@ -2735,7 +2726,7 @@ The CPU completed in 7268 cycles.
 
 <h5>Username</h5>
 
-<pre><code><mark>ffff</mark></pre></code>
+<pre><code>ffff</pre></code>
 
 <h5>Password</h5>
 
@@ -2921,7 +2912,7 @@ The CPU completed in 7268 cycles.
 └──────────────────┘
 </code></pre>
 
-<p>The third word of the third block differs from the previous ones. This second crucial difference may also affect the algorithm in a way that causes breakage.</p>
+<p>The third word of the third block is not the same as the previous ones. This second crucial difference may also affect the algorithm in a way that causes breakage.</p>
 
   </section>
 </div>
@@ -3280,7 +3271,7 @@ The CPU completed in 7351 cycles.
 46aa:  b012 0845      call	#0x4508 &lt;free&gt;
 </code></pre>
 
-<p>The <code>R15</code> register contains the value <code>0x2424</code> before the first free call, a pointer to the buffer containing the dummy password.</p>
+<p>The <code>R15</code> register contains the value <code>0x2424</code> before the first free call, which is a pointer to the buffer containing the dummy password.</p>
 
 <pre><code>2400: 0824 0010 0000 0000 0824 1e24 2100 aaaa   .$.......$.$!...
 2410: aaaa aaaa aaaa aaaa aaaa aaaa aaaa cccc   ................
@@ -3462,7 +3453,7 @@ The CPU completed in 7351 cycles.
                        └────┴───────────────────────┘
 </code></pre>
 
-<p>The algorithm loads the third word into a register, sets the least significant bit to zero via a logical AND operation, and writes the value back.</p>
+<p>The algorithm loads the third word into a register, sets the least significant bit to zero via a logical <code>AND</code> operation, and writes the value back.</p>
 
   </section>
   <section id="first-block-execution-trace-4" style="height: 51em">
@@ -3566,7 +3557,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 
 <h3>Default Execution Path</h3>
 
-<p>It is clear how to reach the code that triggers the arbitrary write primitive, but the rest of the algorithm is still opaque. Disregard the exploit and consider the path taken when neither of the conditions for the failing branches are satisfied. The code should take the following execution path.</p>
+<p>It is clear how to reach the code that triggers the arbitrary write primitive, but the rest of the algorithm is still opaque. Disregard the exploit and consider the code executed when neither of the conditions for the failing branches are satisfied. The code should take the following execution path.</p>
 
 
 <br>
@@ -3622,11 +3613,11 @@ The words underlined below are the ones modifiable via a buffer overflow.
                            └────┴───────────────────────┘  └──┘   
 </code></pre>
 
-<p>This code will check the least significant bit on the third word of the previous block. The current dummy payloads do not satisfy the following constraints without an overflow.</p>
+<p>This code will check the least significant bit on the third word of the previous block. The current dummy payloads fail to satisfy the following constraints without an overflow.</p>
 
 <pre><code>*(PTR + 4) % 2 == 0</code></pre>
 
-<p>This payload skips the conditional block where the arbitrary write occurs. The next block to execute is below.</p>
+<p>This payload thus skips the conditional block where the arbitrary write occurs. The next block to execute is below.</p>
 
 <br>
       <figure>
@@ -3636,7 +3627,7 @@ The words underlined below are the ones modifiable via a buffer overflow.
 
       <br>
 
-<p>Again, the underlined words are those modifiable via a buffer overflow.</p>
+      <p>Again, the underlined words are the ones modifiable via a buffer overflow—they are at the same address as those in the previous diagram.</p>
 
 <pre><code class='language-ascii-noshadows'>   ┌───┐
    │R15│
@@ -3764,7 +3755,7 @@ The words underlined below are the ones modifiable via a buffer overflow.
 </code></pre>
 
 
-<p>Again, given the above example payload, this is <em>not</em> what happens. The data structure is tweaked with debugger commands to result in this state.</p>
+<p>Again, given the above example payload, this is <em>not</em> what usually happens. The data structure is tweaked with debugger commands to result in this state.</p>
 
 <h3>Real Execution Path</h3>
 
@@ -5109,9 +5100,7 @@ The words underlined below are the ones modifiable via a buffer overflow.
 </ol>
 
 
-<p>The second area is called the heap. Envision it as a pile of whatever large or unpredictably sized data will not fit into the stack.</p>
-
-<p>Fundamentally, the heap is just a chunk of RAM used to store large chunks of data. Sections are designated to hold new data as necessary, and sections holding disused data are emptied and freed up. The process of slicing and dicing this memory is called dynamic memory management.</p>
+<p>The second area is called the heap. Envision it as a pile of whatever large or unpredictably sized data will not fit into the stack. Fundamentally, the heap is just a chunk of RAM used to store chunks of data. Sections are designated to hold new data as necessary, and sections holding disused data are emptied and freed up. The process of slicing and dicing this memory is called dynamic memory management.</p>
 
 <h4>Dynamic Memory Management Functions</h4>
 
@@ -5205,7 +5194,7 @@ The 'size' field has a special meaning. As you would expect, it contains the len
 
 <h4>The Wilderness</h4>
 
-<p>The chunk at the bottom is called the "wilderness chunk," a large block of free memory that <code>malloc</code> uses when all else fails. This purpose is evident from the massive <code>size</code> field without the in-use bit set.</p>
+<p>The chunk at the bottom is called the "wilderness chunk," a large block of free memory that <code>malloc</code> allocates from when all else fails. This purpose is evident from the massive <code>size</code> field without the in-use bit set.</p>
 
 <pre><code class='language-ascii-noshadows'>    ┌────────┬────────┬────────┬──────────────────────────┐
     │BACK    │FORWARD │  SIZE  │           DATA           │
@@ -5519,7 +5508,7 @@ The 'size' field has a special meaning. As you would expect, it contains the len
 	Whichever is chosen amounts to the same: absolutely nothing. <a href="https://www.youtube.com/watch?v=RFIwEQkH7sg">Cue the music</a>.
 </span></p>
 
-<p>It is time to put this philosophy to the test—by using it to do some things that are slightly more original.</p>
+<p>It is time to put this philosophy to the test—by using it to do something slightly more original.</p>
 
 <h3>Technique #3: Corrupting Instruction Memory</h3>
 <h4>Patching In Unconditional Jumps</h4>
@@ -5798,7 +5787,7 @@ ccd0: 0000 0000 0000 0000 0000 0000 0000 0000   ................
 43a0: 0000 0000 0000 0000 0000 0000 0000 0000   ................
 </code></pre>
 
-<p>The hexdump above highlights the return address for <code>free</code>. The backward merge will happen as long as its value is even. To ensure the exploit works, align this word with the <code>size</code> field of the "chunk" to which bk points.</p>
+<p>The hexdump above highlights the return address for <code>free</code>. The backward merge will happen as long as its value is even. To ensure the exploit works, align this word with the <code>size</code> field of the "chunk" to which <code>bk</code> points.</p>
 
 <p>Chunk metadata is six bytes long, so the <code>bk</code> pointer should point to two words lower in memory than the return address.</p>
 
@@ -5918,7 +5907,7 @@ This operation must occur in the middle of <code>free</code> during its executio
       </figure>
 <br>
 
-<p>The target to patch should be just after the algorithm writes the corrupted <code>fd</code> pointer into the middle of <code>free</code>. The following instruction suffices because it is two words long, and its second word, to be interpreted as the size field, is even.</p>
+<p>The target to patch should be just after the algorithm writes the corrupted <code>fd</code> pointer into the middle of <code>free</code>. The following instruction suffices because it is two words long, and its second word, which will be interpreted as the size field, is even.</p>
 
 <pre><code>4534:  1d4f <mark>0200</mark>      mov 0x2(r15), r13</code></pre>
 
@@ -5986,16 +5975,14 @@ The CPU completed in 7251 cycles.</code></pre>
 <p>Algiers, however, is not the only heap exploitation challenge in the series. The penultimate, Chernobyl, involves a heap resident hash table and an implementation that deliberately breaks the conventional dlmalloc technique. In the last decade, only 800 people exploited it. They are the top 2%.</p>
 
 
-<p>Leaderboards tracked both exploit cycle counts and lengths for Chernobyl during that period. The two people with the shortest exploits for the latter tied for 59 bytes. Understanding the leakless size field arithmetic technique is why <a href="./chernobyl.html">yours truly was one of them</a>.</p>
-
-<p>An information security firm with a <a href="https://www.google.com/finance/quote/NCC:LON?window=MAX">nine-figure market cap</a> hosted that leaderboard.</p>
+<p>A leaderboard hosted by a security firm with a <a href="https://www.google.com/finance/quote/NCC:LON?window=MAX">nine-figure market cap</a> tracked both exploit cycle counts and lengths for Chernobyl during that period. The two people with the world's shortest exploits for the latter tied for 59 bytes. Understanding the leakless size field arithmetic technique is why <a href="./chernobyl.html">yours truly was one of them</a>.</p>
 
 <h2>Conclusion</h2>
 
 <p>This heap implementation has a very small codebase, which lends itself well to dissection for educational purposes. Attempting to explain the original Doug Lea Malloc exploit in similar detail would be practically impossible due to the sheer size of the code base. It took fifteen years for a simple enough heap implementation to come into existence to enable this walkthrough.</p>
 
-<p>More than being difficult, abusing memory safety vulnerabilities is convoluted. It requires the ability to dive into the lowest levels of the implementation and see what is happening under the abstractions. This explanation attempts to capture as many of the specifics as possible, but even for that, it is far inferior to single-stepping through the assembly. Perhaps this deters people—much as some might wish otherwise, there is no such thing as a survey course in pwn.</p>
+<p>More than being difficult, abusing memory safety vulnerabilities is convoluted. It requires the ability to dive into the lowest levels of the implementation and see what is happening under the abstractions. This explanation attempts to capture as many of the specifics as possible, but even for that, it is far inferior to single-stepping through the assembly. Perhaps this is what deters people—much as some might wish otherwise, there is no such thing as a survey course in pwn.</p>
 
-<p>That said, if it must take a thousand hours, it helps to know where to start.</p>
+<p>That said, if it must take a thousand hours, it helps to know where to start. With any luck, this page is that place.</p>
 
 </body></html>
