@@ -386,7 +386,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
           loading="eager" alt="Vancouver hardware architecture." />
       </figure>
 
-      <p>The deadbolt is assumed to be an electromechanical device that performs some physical action when supplied with voltage. Control over this action is equivalent to owning the system. Successfully triggering the unlock interrupt from software most likely causes the processor to pull a GPIO pin high, thus supplying voltage to the deadbolt and causing it to retract.</p>
+      <p>The deadbolt is assumed to be an electromechanical device that performs some physical action when supplied with power. Control over this action is equivalent to owning the system. Successfully triggering the unlock interrupt from software most likely causes the processor to pull a GPIO pin high, thus supplying power to the deadbolt and causing it to retract.</p>
 
 <h3>Hanoi</h3>
 <p>Hanoi was the first device version to employ an HSM, relying on it as a secure credential store. Based on the level manual, the hardware architecture resembles the following diagram.</p>
@@ -407,7 +407,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
           loading="eager" alt="Whitehorse hardware architecture." />
       </figure>
 
-      <p>The flaw in the above design is that there is no redundancy. An attacker only needs to exploit one processor to supply voltage to the deadbolt and can safely ignore the other chip.</p>
+      <p>The flaw in the above design is that there is no redundancy. An attacker only needs to exploit one processor to supply power to the deadbolt and can safely ignore the other chip.</p>
 
       <p>This design would require a simple modification to fix: disconnect the MCU from the deadbolt, requiring an attacker to compromise the HSM.</p>
 
@@ -423,7 +423,7 @@ This [hardware version contains] two available  ports: the LockIT Pro Deadbolt s
       </figure>
 
 
-      <p>The transistor is assumed to be an <code>AND</code> logic gate, meaning that voltage physically cannot be supplied to the deadbolt unless the MCU and the HSM pull their bottom pins high. The code on the MCU communicates with the HSM over serial (or similar), authenticates in some capacity, and the HSM pulls its pin high if the authentication is successful. The MCU can then pull its pin high to trigger the unlock.</p>
+      <p>The transistor is assumed to be an <code>AND</code> logic gate, meaning that power physically cannot be supplied to the deadbolt unless the MCU and the HSM pull their bottom pins high. The code on the MCU communicates with the HSM over serial (or similar), authenticates in some capacity, and the HSM pulls its pin high if the authentication is successful. The MCU can then pull its pin high to trigger the unlock.</p>
 
 
       <h2>Attack Surface</h2>
