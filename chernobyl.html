@@ -1448,7 +1448,7 @@ Adding user account user6 with pin 0002.
 </ol>
 
 
-<p>The heap starts at address 0x5000 on this firmware version—unlike Algiers, where it begins at a lower address than the stack. Here, both the stack and text segments reside in the <code>0x3000-0x4F00</code> range. Either of the above checks breaks the exploit because all realistic write targets are in lower memory than the heap.</p>
+<p>The heap starts at address <code>0x5000</code> on this firmware version—unlike Algiers, where it begins at a lower address than the stack. Here, both the stack and text segments reside in the <code>0x3000-0x4F00</code> range. Either of the above checks breaks the exploit because all realistic write targets are in lower memory than the heap.</p>
 
 
 <p>Reverting the forward pointer to its original value and tweaking the collision byte corrects this error.</p>
@@ -1496,7 +1496,7 @@ fee0: *
 <h5>Heap Overflow (Hex):</h5>
 <pre><code>6e657720<mark>c64c</mark>fc50ffff<mark>62</mark>2030303032</code></pre>
 
-<p>After supplying the usual inputs, sending any character other than "<code>a</code>" or "<code>n</code>" will parse as an invalid command and cause the block with the overwritten instruction to execute.</p>
+<p>After supplying the usual inputs, sending any character other than "<code>a</code>" or "<code>n</code>" will parse as an invalid command and cause the routine with the overwritten instruction to execute.</p>
 
 <h5>Input:</h5>
 <pre><code>test</code></pre>
@@ -2212,7 +2212,7 @@ A backend change altered how interrupt calls interpret the contents of <code>SR<
 5360: *                                                    
 </code></pre>
 
-<p>This behavior means the existing forward pointer (<code>0x50fc</code>) is replaceable with any of the seven others. Given eight forward pointers, each with a 1 in 8 chance to cause the hash of the exploit to be zero, the inclusive probability of success is 1. The collision byte is now unnecessary, which reduces the exploit length by one byte. The search for a forward pointer that causes the exploit to hash to bucket zero can be automated as follows.</p>
+<p>This behavior means the existing forward pointer (<code>0x50fc</code>) is replaceable with any of the seven others. Given eight forward pointers, each with a 1 in 8 chance to cause the hash of the exploit to be zero, the inclusive probability of success is about 0.66. The collision byte is now unnecessary, which reduces the exploit length by one byte. The search for a forward pointer that causes the exploit to hash to bucket zero can be automated as follows.</p>
 
 <pre><code>&gt;&gt;&gt; fdlist = [&quot;fc50&quot;, &quot;5c51&quot;, &quot;bc51&quot;, &quot;1c52&quot;, &quot;7c52&quot;, &quot;dc52&quot;, &quot;3c53&quot;]
 &gt;&gt;&gt; for i in fdlist:
@@ -2381,7 +2381,7 @@ b&apos;ca3ddc5245f4&apos;
 3e10: *  
 </code></pre>
 
-<p>Such an operation is unrealistic, as this MCU has sixteen registers—only twelve of which are general purpose. A search through the disassembly reveals that the most optimal one is only eight <code>POP</code> instructions long.</p>
+<p>Such an operation is unrealistic, as this MCU has sixteen registers—only twelve of which are general purpose. A search through the disassembly reveals that the most optimal gadget is only eight <code>POP</code> instructions long.</p>
 
 <pre><code>49ba:  3441           pop       r4
 49bc:  3541           pop       r5
@@ -4142,6 +4142,7 @@ b&#39;e63ddc5245&#39;
 
       <p>The exploit is now in a three-way tie for the second shortest input length.</p>
 
+      <h4>Obligatory Cinema Reference</h4>
 <blockquote>
 There are only about six people in the world who could set up fail-safes like this.<br>
 <cite>— Q, James Bond: Skyfall</cite>
@@ -4190,14 +4191,7 @@ There are only about six people in the world who could set up fail-safes like th
 4d7a:  3041           ret
 </code></pre>
 
-<p>By <em>sheer coincidence</em>, this returns to a gadget that will pop one word off the stack and redirect execution to the attacker-controlled ROP chain. Given the arrangement of functions in the firmware image, the odds<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
-
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
-<span class="sidenote">
-	Yes, yours truly manually counted the instructions and calculated this probability. 
-</span>
-
-of this happening are around 1 in 5 at best—without accounting for many potential side effects.</p>
+<p>By <em>sheer coincidence</em>, this returns to a gadget that will pop one word off the stack and redirect execution to the attacker-controlled ROP chain. Given the arrangement of functions in the firmware image, the odds of this happening are extremely low—even without accounting for many potential side effects.</p>
 
 <p>The issue is that there is not a suitable forward pointer available.</p>
 

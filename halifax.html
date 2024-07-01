@@ -1911,7 +1911,7 @@ ffaf 00b5 0000 0000
 
 bytes from user input and write them to address <code>0x9000</code> in the main MCU memory. This buffer will be the canonical, unchanging copy of the SRAM data.</p>
 
-<p>Following this, the shellcode copies the entire input buffer to address <code>0xB000</code> via a call to memcpy.</p>
+<p>Following this, the shellcode copies the entire input buffer to address <code>0xB000</code> via a call to <code>memcpy</code>.</p>
 
 <pre><code class='language-ascii-noshadows'>      ┌─────────┬─────────────────────┐
       │3e40 00f0│mov  #0xf000, r14    │
@@ -2557,7 +2557,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 <p>This crash indicates that the loop ended without sending a valid key to the correct interrupt.</p>
 
 <h4>Attempt 2</h4>
-<p>The next logical step is to try every possible interrupt in the 0x40-0x4F range, starting with <code>0x42</code>.</p>
+<p>The next logical step is to try every possible interrupt in the <code>0x40-0x4F</code> range, starting with <code>0x42</code>.</p>
 
 <h5>Modified Payload</h5>
 <pre><code>0d12           push	r13
@@ -2575,7 +2575,7 @@ b012 5045      call	#0x4550
 
 <p>Running the above payload and submitting the leaked SRAM data in big-endian format causes the unlock interrupt to trigger successfully.</p>
 
-<pre></code>Door Unlocked
+<pre><code>Door Unlocked
 The CPU completed in 4893366 cycles.</code></pre>
 <h3>Final Exploit</h3>
 <pre><code>8000 ff
