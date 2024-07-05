@@ -40,9 +40,7 @@
 
 <body id="top">
   <header>
-    <h1>
-	    I'll See Your FPGA and Raise You a Pencil: Implementing A Preimage Atack On The Back of a Napkin
-    </h1>
+    <h1>I’ll See Your FPGA and Raise You a Pencil: Implementing a Preimage Attack on the Back of a Napkin</h1>
 	    </h2>
     <p class="author">
       James Every <br />
@@ -69,7 +67,7 @@
     <br>
     <b>Solves Per Month:</b> 6.57
     <br>
-    <b>Reading Time:</b> 10 minutes
+    <b>Reading Time:</b> 6 minutes
 
 
     <h5>Rendering Note:</h5>
@@ -81,7 +79,7 @@
 </span>
     <h2>Executive Summary</h2>
 
-    <p>Out of the 50,000 who attempted Microcorruption in the last decade, <a href="https://web.archive.org/web/20220513195347/https://microcorruption.com/hall_of_fame/progress">only the top 1% completed it</a>. Five hundred people have successfully reverse-engineered the firmware for the final challenge. Most write a brute-force script, some use an SAT solver, and one reimplemented the algorithm on an FPGA. This walkthrough documents how to do it with a pencil, a napkin, and a shot of bourbon.</p>
+    <p>Out of the 50,000 who attempted Microcorruption in the last decade, <a href="https://web.archive.org/web/20220513195347/https://microcorruption.com/hall_of_fame/progress">only the top 1% completed it</a>. Five hundred people have successfully reverse-engineered the firmware for the final challenge. Most write a brute-force script, some use a SAT solver, and one reimplemented the algorithm on an FPGA. This walkthrough documents how to do it with a pencil, a napkin, and a shot of bourbon.</p>
 
 <br>
       <figure>
@@ -817,7 +815,14 @@ r12 e000 r13 5070 r14 e000 r15 403c
 <p>Recall that <code>R6</code> should be <code>0x9298</code> and <code>R4</code> should be <code>0xfeb1</code>. Not accounting for the fact that endianness is reversed on this iteration, only the first byte in <code>R6</code> is completely wrong (the second is only a single bit off).</p>
 
 <h3>Final Payload</h3>
-<p>The intuition here is that it is possible to "nudge" the value ever closer by providing only one byte of input at a time. This is more of an art than a science. The following input accomplishes this.</p>
+<p>The intuition here is that it is possible to "nudge" the value ever closer by providing only one byte of input at a time. This is more of an art than a science. The following hand-written payload accomplishes this.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	In other words, it is possible to implement this attack by single-stepping execution and poking words into memory until the values match—no napkin or pencil required.
+</span>
+
+</p>
 
 <pre><code>b25201000100010000050100000101000004000101000700b55dffff4e01</code></pre>
 
