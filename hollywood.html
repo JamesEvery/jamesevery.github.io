@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html><head>
+    <title>Hollywood — James Every</title>
+    <link rel="shortcut icon" type="image/jpg" href="./images/favicon/glider.ico"/>
+
+    <meta charset="utf-8">
+    <meta http-equiv="Content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="description"
+        content="The writings and projects of James Every." />
+    <meta property="og:title" content="About" />
+    <meta property="og:url" content="https://jamesevery.com" />
+    <meta property="og:description"
+        content="The writings and projects of James Every." />
+    <meta property="og:type" content="website" />
+
+    <link rel="stylesheet" href="./css/style.min.css" />
+    <link rel="stylesheet" href="./css/slider.css" />
+    <style type="text/css">
+
+.language-ascii-art {
+ display: inline-block; 
+ font-family: "Lucida Console", Monaco, monospace;
+ letter-spacing: -0.2em;
+ line-height: 0.8em;
+ text-shadow: 0 0 5px rgba(100,100,100,0.5);
+}
+
+.language-ascii-noshadows {
+ display: inline-block; 
+ letter-spacing: 0em;
+ line-height: 1.16em;
+}
+    </style>    
+</head>
+
+<body>
+<div>
+
+<body id="top">
+  <header>
+    <h1>
+	    I'll See Your FPGA and Raise You a Pencil: Implementing A Preimage Atack On The Back of a Napkin
+    </h1>
+	    </h2>
+    <p class="author">
+      James Every <br />
+      July 4th, 2024
+    </p>
+  </header>
+
+    <div class="abstract">
+      <h2>Abstract</h2>
+
+     <p>
+      This page is a walkthrough for a novel exploit for <a href="https://microcorruption.com/debugger/Hollywood">Hollywood</a>, the ultimate challenge from the <a href="https://microcorruption.com/map">Microcorruption</a> wargame originally developed by Matasano.
+      </p>
+
+      </p>
+    </div>
+
+    <h2>
+	    Overview
+    </h2>
+    <b>First Working Exploit:</b> 2157 UTC, July 2nd, 2020
+    <br>
+    <b>Solve Count At Time Of Exploit:</b> 519
+    <br>
+    <b>Solves Per Month:</b> 6.57
+    <br>
+    <b>Reading Time:</b> 10 minutes
+
+
+    <h5>Rendering Note:</h5>
+<p>There is a known issue with Android lacking a true monotype system font, which breaks many of the extended ASCII character set diagrams below. Please view this page on a Chrome or Firefox-based desktop browser to avoid rendering issues.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	Ideally on a Linux host.
+</span>
+    <h2>Executive Summary</h2>
+
+    <p>Out of the 50,000 who attempted Microcorruption in the last decade, <a href="https://web.archive.org/web/20220513195347/https://microcorruption.com/hall_of_fame/progress">only the top 1% completed it</a>. Five hundred people have successfully reverse-engineered the firmware for the final challenge. Most write a brute-force script, some use an SAT solver, and one reimplemented the algorithm on an FPGA. This walkthrough documents how to do it with a pencil, a napkin, and a shot of bourbon.</p>
+
+<br>
+      <figure>
+        <img src="./images/chernobyl/microcorruption-overall-progress.png"
+          loading="eager" alt="Overall level progress." />
+      </figure>
+
+      <br>
+
+    <h2>System Architecture</h2>
+
+    <p>The emulated device runs on the MSP430 instruction set architecture. It uses a 16-bit little-endian processor and has 64 kilobytes of RAM. The <a href="https://microcorruption.com/public/manual.pdf">official manual</a> includes the details, but relevant functionality is summarized below.</p>
+
+    <h3>Interface</h3>
+    <p>Several separate windows control the debugger functionality.</p>
+
+    <br>
+      <figure>
+        <img src="./images/algiers/algiers-gui.png"
+          loading="eager" alt="Debugger GUI." />
+      </figure>
+
+      <p>A user input prompt like the following is the device's external communication interface.</p>
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-input-prompt.png"
+          loading="eager" alt="Popup triggered by getsn interrupt." />
+      </figure>
+
+      <h3>Exploit Development Objective</h3>
+      <p>The equivalent of popping a shell on this system is calling interrupt <code>0x7F</code>.</p>
+
+
+      <h5>Disassembly</h5>
+      <pre><code>3240 00ff      mov     #0xff00, sr
+b012 1000      call    #0x10
+</code></pre>
+
+      <h5>Assembly</h5>
+<pre><code>324000ffb0121000</code></pre>
+
+<p>On this firmware version, there is a dedicated function that does this. The following message is displayed in the interface when the implementation calls this interrupt successfully.</p>
+
+
+      <br>
+      <figure>
+        <img src="./images/algiers/algiers-unlock.png"
+          loading="eager" alt="Unlock status message." />
+      </figure>
+
+<h2>High-Level Analysis</h2>
+
+      <p>In short, the Hollywood firmware includes the following countermeasures.</p>
+
+      <ol>
+	      <li>Jumps into the middle of multi-word instructions to break linear sweep disassemblers.</li>
+	      <li>Runtime packing.</li>
+	      <li>Opcode-level ASLR.</li>
+	      <li>A custom hashing algorithm.</li>
+	      </ol>
+
+	      <p>Other walkthroughs explain how to circumvent these countermeasures in greater detail. Those wishing for a more complete analysis are advised to consult the one by <a href="https://grazfather.github.io/posts/2018-11-24-microcorruption-hollywood/">Grazfather</a>.</p> 
+
+	      <h3>Counter-Countermeasures</h3>
+	      <p>The problem posed by the code jumping into the middle of multi-word instructions is relatively simple to circumvent with a program like Ghidra or IDA Pro, which are intelligent enough to follow the actual control flow and avoid instruction mangling. This tooling provides little information because these tools later choke on the runtime packing.</p>
+
+	      <h3>The Poor Man's Virtual Machine</h3>
+	      <p>Another author referred to the runtime packing and opcode-level ASLR as <a href="https://vigeant.segfaults.net/2017-02-20-microcorruption_hollywood-post/">a poor man's virtual machine</a>. The implementation will generate a random number, add it to the base address <code>0xe000</code>, copy one instruction to the resulting randomized address, append a <code>RET</code> instruction, call the gadget, and zero it afterward.</p> 
+
+	      <h4>Breaking The ASLR</h4>
+	      <p>It is difficult to keep track of what is going on when everything is at a random address. The first objective is to break the random number generator so that it always adds zero to the base address. This can be accomplished by using the following debugger macro to patch the <code>rand</code> interrupt calls to always return zero.</p>
+
+	      <pre><code>let 44c2=430f; let 44c4=4302; let 456e=430f; let 4570=4302</code></pre>
+
+	      <h4>Extracting The Algorithm</h4>
+	      <p>Even after eliminating the randomization, it is still difficult to grasp what is going on due to the sheer volume of instructions. After single-stepping and manually reading a few thousand opcodes, it becomes apparent that there are intermittent calls to address <code>0xe000</code>, which contains a single instruction that will execute before returning. These opcodes are executed on the "virtual machine" described above and can be "single-stepped" by breaking at address <code>0xe000</code>, continuing, and observing the contents of the <code>PC</code> register with each iteration.</p>
+
+
+	      <pre><code>break e000; c</code></pre>
+
+	      <p>The characters in the following string are printed to the console with every two "steps", where each step is an invocation of the above command.</p>
+
+	      <pre><code>What's the password?</code></pre>
+
+	      <p>The state of the system is only interesting after untrusted input is read. Skipping to the <code>gets</code> interrupt call requires unbreaking address <code>0xe000</code> and continuing, which causes execution to skip to the prompt for user input. The full macro to achieve this is as follows.</p>
+
+	      <pre><code>let 44c2=430f; let 44c4=4302; let 456e=430f; let 4570=4302; c; break e000</code></pre>
+
+	      <p>Stepping through VM execution from this point onward allows manual extraction of the following algorithm, instruction by instruction.</p>
+
+	      <pre><code>mov      #0x2600, r5
+clr      r6
+add      @r5, r4
+swpb     r4
+xor      @r5+, r6
+xor      r4, r6
+xor      r6, r4
+xor      r4, r6
+tst      0x0(r5)
+mov      sr, r7
+and      #0x2, r7
+rra      r7
+xor      #0x1, r7
+swpb     r7
+rra      r7
+sxt      r7
+swpb     r7
+sxt      r7
+mov      #0x4b18, r8
+and      r7, r8
+xor      #-0x1, r7
+and      #0x47aa, r7
+add      r7, r8
+clr      r7
+add      @r5, r4
+swpb     r4
+xor      @r5+, r6
+xor      r4, r6
+xor      r6, r4
+xor      r4, r6
+tst      0x0(r5)
+mov      sr, r7
+and      #0x2, r7
+rra      r7
+xor      #0x1, r7
+swpb     r7
+rra      r7
+mov      #0x4b18, r8
+and      r7, r8
+xor      #-0x1, r7
+and      #0x47aa, r7
+add      r7, r8
+clr      r7
+cmp      #0xfeb1, r4
+mov      sr, r7
+clr      r4
+cmp      #0x9298, r6
+and      sr, r7
+clr      r6
+rra      r7
+xor      #0x1, r7
+swpb     r7
+rra      r7
+rra      r7
+rra      r7
+rra      r7
+bis      r7, sr</code></pre>
+
+<h3>Custom Hashing Algorithm</h3>
+<p>This code is very similar to the bytecode emitted by a JIT compiler. It does not have jumps, which implies that a higher-level abstraction may be generating it on the fly.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	The lack of conditional branches also suggests that this code is side channel analysis resistant.
+</span>
+
+
+</p>
+
+<h5>Success Condition</h5>
+<p>The following checks occur near the end of the algorithm.</p>
+<pre><code><mark>cmp      #0xfeb1, r4</mark>
+mov      sr, r7
+clr      r4
+<mark>cmp      #0x9298, r6</mark>
+and      sr, r7
+clr      r6
+</code></pre>
+
+<p>This sets the contents of <code>R7</code> based on the result of the <code>CMP</code> instructions. After some massaging, this value is XORed with <code>SR</code>.</p>
+
+<pre><code>rra      r7
+xor      #0x1, r7
+swpb     r7
+rra      r7
+rra      r7
+rra      r7
+rra      r7
+<mark>bis      r7, sr</mark>
+</code></pre>
+
+<p>For context, some bits in <code>SR</code> are hardware control flags.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	See figure 3-6 in <a href="https://www.ti.com/lit/ug/slau049f/slau049f.pdf">this document</a>.
+</span>
+
+</p>
+
+<br>
+      <figure>
+        <img src="./images/hollywood/msp430_status_bits.png"
+          loading="eager" alt="Status register bits chart." />
+      </figure>
+
+      <p>If the previous comparisons fail, the code sets the "CPU OFF" bit in <code>SR</code> via a convoluted series of bitwise operations, halting the processor. If they succeed, that bit remains unset, and the unlock interrupt is called.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	The extracted algorithm is taken from an execution trace, which does not include the interrupt call because it is never executed unless the password is valid.
+</span>
+
+The goal is simple: craft an input such that registers <code>R4</code> and <code>R6</code> contain the values <code>0xfeb1</code> and <code>0x9298</code>, respectively.</p>
+
+
+<h5>Control Flow</h5>  
+
+<p>This algorithm iterates over the supplied password, one 16-bit word at a time, to calculate a four byte hash. The relevant sections of the algorithm are depicted below.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	Only operations that affect the contents of <code>R4</code> and <code>R6</code> are important. The rest of the instructions are omitted for brevity.
+</span>
+
+
+<pre><code class="language-ascii-noshadows">┌─────────┐ ┌────────────────────┐        
+│ INITIAL │ │mov      #0x2600, r5│        
+│ SETUP   │ │clr      r6         │        
+└─────────┘ └────────────────────┘        
+                                          
+┌─────────┐ ┌────────────────────┐◄──────┐
+│         │ │add      @r5, r4    │       │
+│         │ │swpb     r4         │       │
+│HASHING  │ │xor      @r5+, r6   │       │
+│ALGORITHM│ │xor      r4, r6     │ "JNZ" │
+│         │ │xor      r6, r4     │       │
+│         │ │xor      r4, r6     │       │
+│         │ │tst      0x0(r5)    │       │
+└─────────┘ └────────────────────┴───────┘
+                                          
+┌─────────┐ ┌────────────────────┐        
+│         │ │cmp      #0xfeb1, r4│        
+│         │ │mov      sr, r7     │        
+│         │ │clr      r4         │        
+│         │ │cmp      #0x9298, r6│        
+│         │ │and      sr, r7     │        
+│ CHECK   │ │clr      r6         │        
+│ OUTPUT  │ │rra      r7         │        
+│ VALID   │ │xor      #0x1, r7   │        
+│         │ │swpb     r7         │        
+│         │ │rra      r7         │        
+│         │ │rra      r7         │        
+│         │ │rra      r7         │        
+│         │ │rra      r7         │        
+│         │ │bis      r7, sr     │        
+└─────────┘ └────────────────────┘        
+</code></pre>
+
+<h5>Constraints</h5>
+<p>The algorithm breaks out of the loop when the current word is null. It is possible to have null <em>bytes</em> in the password, but it is not possible to have null <em>words</em>.</p>
+
+<h2>Brute-Forcing Hollywood in a Custom Computing Machine</h2>
+
+<p>Most people with working exploits reimplement the algorithm in a higher level language, at which point they typically bruteforce the password, although some choose to use z3. Then, there is <a href="https://github.com/aaronferrucci/hollywood_fpga_hash">this guy</a>:</p>
+
+<blockquote>
+	The current revision has 32 hasher cores. The hardware is a Max10 development board, with a 10M50DAF484C6GES device. I was able to clock the accelerator subsystem at 275MHz, and kept the Microproccessor subsystem running at a nice safe 50MHz since it's not in the critical path. The system finds all 18 passwords in about 5 1/4 minutes. Compared to the software solution, that's about a 138x speedup.
+	<br>
+	<cite>— Aaron Ferrucci</cite>
+</blockquote>
+
+<p>This is an FPGA reimplementation of the hashing algorithm that can find all five-byte preimages in the time it takes to make coffee.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	Yours truly would like to congratgulate Mr. Ferrucci for becoming a gold medalist in the resume padding olympics.
+</span>
+</p>
+
+<h3>Rationale</h3>
+<p>The justification for this project was as follows.</p>
+
+<blockquote>
+After staring at the hashing algorithm and the required output values for a while, I concluded that I don't know the required math for solving this sort of puzzle. [...] Adding to my shame at not being able to simply solve for the password with math: the brute force search for 5-byte passwords takes about 12 hours to run on my pretty-modern laptop. Then I thought of a way to salvage my dignity: I know how to design digital logic; I have access to programmable logic hardware; why not build a custom computing machine to find the passwords?
+	<br>
+	<cite>— Aaron Ferrucci</cite>
+</blockquote>
+
+<h2>What Math?</h2>
+<p>Contrary to popular belief, breaking this hashing algorithm does not require math, nor does it require bruteforcing, SAT solvers, or FPGAs.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	That said, yours truly does not begrudge those honor bound to reimplement homebrew hashing algorithms in SystemVerilog to avoid having to commit seppuku (as is required in the blood oath taken by all electrical engineering graduates).
+</span>
+
+It does not need to be reimplemented in a higher level language—in fact, it doesn't require even a single line of code. Only one thing is necessary: perseverence.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	Also, liquor (ideally 80 proof bourbon).
+</span>
+
+<h3>Understanding The Algorithm</h3>
+
+<p>The hashing algorithm is below. Consider the highlighted section.</p>
+
+<pre><code class="language-ascii-noshadows">┌─────────┐ ┌────────────────────┐◄──────┐
+│         │ │add      @r5, r4    │       │
+│         │ │swpb     r4         │       │
+│HASHING  │ │xor      @r5+, r6   │       │
+│ALGORITHM│ │<mark>xor      r4, r6</mark>     │ "JNZ" │
+│         │ │<mark>xor      r6, r4</mark>     │       │
+│         │ │<mark>xor      r4, r6</mark>     │       │
+│         │ │tst      0x0(r5)    │       │
+└─────────┘ └────────────────────┴───────┘
+</code></pre>
+
+<p>As other writeups have observed, this effectively swaps the contents of <code>R4</code> and <code>R6</code>. This would be implemented with a single <code>XCHG</code> instruction on x86 platforms. While this is not valid MSP430 assembly, it makes understanding the algorithm easier. The modified loop is thus as follows.</p>
+
+<pre><code class="language-ascii-noshadows">┌─────────┐ ┌────────────────────┐◄──────┐
+│         │ │add      @r5, r4    │       │
+│HASHING  │ │swpb     r4         │       │
+│ALGORITHM│ │xor      @r5+, r6   │ "JNZ" │
+│         │ │<mark>xchg     r4, r6</mark>     │       │
+│         │ │tst      0x0(r5)    │       │
+└─────────┘ └────────────────────┴───────┘
+</code></pre>
+
+<h5>Test Input</h5>
+
+<p>Consider what happens with the following test password.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	Note that all inputs are hex strings.
+</span>
+
+</p>
+
+<pre><code>11223344
+</code></pre>
+
+<h5>Algorithm Behavior</h5>
+<div id="slides">
+  <section id="int-call-1">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├──┬──┤      ├──┬──┤  
+       │00│00│      │00│00│  
+       └──┴──┘      └──┴──┘  
+                             
+                             
+                             
+                             
+                             
+┌──────┬──┬──┬──┬──┬──┬──┐   
+│INPUT │11│22│33│44│00│00│   
+└──────┴──┴──┴──┴──┴──┴──┘   
+        ▲                    
+        │                    
+       ┌┴───┐                
+       │ R5 │                
+       └────┘                
+                             
+┌──┐   ┌────────────────────┐
+│PC├─► │add      @r5, r4    │
+└──┘   │swpb     r4         │
+       │xor      @r5+, r6   │
+       │xchg     r4, r6     │
+       │tst      0x0(r5)    │
+       └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-2">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├──┬──┤      ├──┬──┤  
+       │22│11│      │00│00│  
+       └──┴──┘      └──┴──┘  
+       ▲     ▲               
+       │     │               
+       │ ADD │               
+       │     │               
+       │     │               
+┌──────┼──┬──┼──┬──┬──┬──┐   
+│INPUT │11│22│33│44│00│00│   
+└──────┴──┴──┴──┴──┴──┴──┘   
+        ▲                    
+        │                    
+       ┌┴───┐                
+       │ R5 │                
+       └────┘                
+                             
+       ┌────────────────────┐
+┌──┐   │add      @r5, r4    │
+│PC├─► │swpb     r4         │
+└──┘   │xor      @r5+, r6   │
+       │xchg     r4, r6     │
+       │tst      0x0(r5)    │
+       └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-3">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├──┬──┤      ├──┬──┤  
+       │11│22│      │00│00│  
+       └──┴──┘      └──┴──┘  
+                             
+        ◄────                
+        SWPB                 
+        ────►                
+                             
+┌──────┬──┬──┬──┬──┬──┬──┐   
+│INPUT │11│22│33│44│00│00│   
+└──────┴──┴──┴──┴──┴──┴──┘   
+        ▲                    
+        │                    
+       ┌┴───┐                
+       │ R5 │                
+       └────┘                
+                             
+       ┌────────────────────┐
+       │add      @r5, r4    │
+┌──┐   │swpb     r4         │
+│PC├─► │xor      @r5+, r6   │
+└──┘   │xchg     r4, r6     │
+       │tst      0x0(r5)    │
+       └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-4">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├──┬──┤      ├──┬──┤  
+       │11│22│      │22│11│  
+       └──┴──┘      └──┴──┘  
+                    ▲     ▲  
+       ┌────────────┘     │  
+       │       XOR        │  
+       │     ┌────────────┘  
+       │     │               
+┌──────┼──┬──┼──┬──┬──┬──┐   
+│INPUT │11│22│33│44│00│00│   
+└──────┴──┴──┴──┴──┴──┴──┘   
+              ▲              
+              │              
+             ┌┴───┐          
+             │ R5 │          
+             └────┘          
+                             
+       ┌────────────────────┐
+       │add      @r5, r4    │
+       │swpb     r4         │
+┌──┐   │xor      @r5+, r6   │
+│PC├─► │xchg     r4, r6     │
+└──┘   │tst      0x0(r5)    │
+       └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-5">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├─────┤◄─────┼─────┤  
+       │22 11│ XCHG │11 22│  
+       └─────┴─────►└─────┘  
+                             
+                             
+                             
+                             
+                             
+┌──────┬──┬──┬──┬──┬──┬──┐   
+│INPUT │11│22│33│44│00│00│   
+└──────┴──┴──┴──┴──┴──┴──┘   
+              ▲              
+              │              
+             ┌┴───┐          
+             │ R5 │          
+             └────┘          
+                             
+       ┌────────────────────┐
+       │add      @r5, r4    │
+       │swpb     r4         │
+       │xor      @r5+, r6   │
+┌──┐   │xchg     r4, r6     │
+│PC├─► │tst      0x0(r5)    │
+└──┘   └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-6">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├──┬──┤      ├──┬──┤  
+       │22│11│      │11│22│  
+       └──┴──┘      └──┴──┘  
+                             
+                             
+                             
+                             
+                             
+┌──────┬──┬──┬──┬──┐         
+│INPUT │33│44│00│00│         
+└──────┴──┴──┴──┴──┘         
+        ▲                    
+        │                    
+       ┌┴───┐                
+       │ R5 │                
+       └────┘                
+                             
+┌──┐   ┌────────────────────┐
+│PC├─► │add      @r5, r4    │
+└──┘   │swpb     r4         │
+       │xor      @r5+, r6   │
+       │xchg     r4, r6     │
+       │tst      0x0(r5)    │
+       └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-7">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├──┬──┤      ├──┬──┤  
+       │66│44│      │11│22│  
+       └──┴──┘      └──┴──┘  
+       ▲     ▲               
+       │     │               
+       │ ADD │               
+       │     │               
+       │     │               
+┌──────┼──┬──┼──┬──┐         
+│INPUT │33│44│00│00│         
+└──────┴──┴──┴──┴──┘         
+        ▲                    
+        │                    
+       ┌┴───┐                
+       │ R5 │                
+       └────┘                
+                             
+       ┌────────────────────┐
+┌──┐   │add      @r5, r4    │
+│PC├─► │swpb     r4         │
+└──┘   │xor      @r5+, r6   │
+       │xchg     r4, r6     │
+       │tst      0x0(r5)    │
+       └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-8">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├──┬──┤      ├──┬──┤  
+       │44│66│      │11│22│  
+       └──┴──┘      └──┴──┘  
+                             
+        ◄────                
+        SWPB                 
+        ────►                
+                             
+┌──────┬──┬──┬──┬──┐         
+│INPUT │33│44│00│00│         
+└──────┴──┴──┴──┴──┘         
+        ▲                    
+        │                    
+       ┌┴───┐                
+       │ R5 │                
+       └────┘                
+                             
+       ┌────────────────────┐
+       │add      @r5, r4    │
+┌──┐   │swpb     r4         │
+│PC├─► │xor      @r5+, r6   │
+└──┘   │xchg     r4, r6     │
+       │tst      0x0(r5)    │
+       └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-9">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├──┬──┤      ├──┬──┤  
+       │44│66│      │55│11│  
+       └──┴──┘      └──┴──┘  
+                    ▲     ▲  
+       ┌────────────┘     │  
+       │       XOR        │  
+       │     ┌────────────┘  
+       │     │               
+┌──────┼──┬──┼──┬──┐         
+│INPUT │33│44│00│00│         
+└──────┴──┴──┴──┴──┘         
+              ▲              
+              │              
+             ┌┴───┐          
+             │ R5 │          
+             └────┘          
+                             
+       ┌────────────────────┐
+       │add      @r5, r4    │
+       │swpb     r4         │
+┌──┐   │xor      @r5+, r6   │
+│PC├─► │xchg     r4, r6     │
+└──┘   │tst      0x0(r5)    │
+       └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-10">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├─────┤◄─────┼─────┤  
+       │55 11│ XCHG │44 66│  
+       └─────┴─────►└─────┘  
+                             
+                             
+                             
+                             
+                             
+┌──────┬──┬──┬──┬──┐         
+│INPUT │33│44│00│00│         
+└──────┴──┴──┴──┴──┘         
+              ▲              
+              │              
+             ┌┴───┐          
+             │ R5 │          
+             └────┘          
+                             
+       ┌────────────────────┐
+       │add      @r5, r4    │
+       │swpb     r4         │
+       │xor      @r5+, r6   │
+┌──┐   │xchg     r4, r6     │
+│PC├─► │tst      0x0(r5)    │
+└──┘   └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-11">
+<pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
+       │ R4  │      │ R6  │  
+       ├──┬──┤      ├──┬──┤  
+       │55│11│      │44│66│  
+       └──┴──┘      └──┴──┘  
+                             
+                             
+                             
+                             
+                             
+┌──────┬──┬──┐               
+│INPUT │00│00│               
+└──────┴──┴──┘               
+        ▲                    
+        │                    
+       ┌┴───┐                
+       │ R5 │                
+       └────┘                
+                             
+       ┌────────────────────┐
+       │add      @r5, r4    │
+       │swpb     r4         │
+       │xor      @r5+, r6   │
+       │xchg     r4, r6     │
+       │tst      0x0(r5)    │
+       └────────────────────┘
+</code></pre>
+  </section>
+  <section id="int-call-6">
+<pre><code class='language-ascii-noshadows'>
+</code></pre>
+  </section>
+  <section id="int-call-6">
+<pre><code class='language-ascii-noshadows'>
+</code></pre>
+  </section>
+</div>
+<ul id="nav">
+  <li><a href="#int-call-1">01</a></li>
+  <li><a href="#int-call-2">02</a></li>
+  <li><a href="#int-call-3">03</a></li>
+  <li><a href="#int-call-4">04</a></li>
+  <li><a href="#int-call-5">05</a></li>
+  <li><a href="#int-call-6">06</a></li>
+  <li><a href="#int-call-7">07</a></li>
+  <li><a href="#int-call-8">08</a></li>
+  <li><a href="#int-call-9">09</a></li>
+  <li><a href="#int-call-10">10</a></li>
+  <li><a href="#int-call-11">11</a></li>
+</ul>
+
+<h4>Reversible Operations</h4>
+<p>Suppose for the sake of argument that it <em>were</em> possible to supply null words as input without terminating the loop. The following ordering would result for each iteration.</p>
+
+<pre><code class='language-ascii-noshadows'>          ┌─────┐ ┌─────┐
+          │ R4  │ │ R6  │
+          └─────┘ └─────┘
+                         
+┌───────┐ ┌──┬──┐ ┌──┬──┐
+│ i = 0 │ │AA│BB│ │CC│DD│
+└───────┘ └──┴──┘ └──┴──┘
+                         
+┌───────┐ ┌──┬──┐ ┌──┬──┐
+│ i = 1 │ │CC│DD│ │BB│AA│
+└───────┘ └──┴──┘ └──┴──┘
+                         
+┌───────┐ ┌──┬──┐ ┌──┬──┐
+│ i = 2 │ │BB│AA│ │DD│CC│
+└───────┘ └──┴──┘ └──┴──┘
+                         
+┌───────┐ ┌──┬──┐ ┌──┬──┐
+│ i = 3 │ │DD│CC│ │AA│BB│
+└───────┘ └──┴──┘ └──┴──┘
+                         
+┌───────┐ ┌──┬──┐ ┌──┬──┐
+│ i = 4 │ │AA│BB│ │CC│DD│
+└───────┘ └──┴──┘ └──┴──┘
+</code></pre>
+
+<p>Ignoring the first iteration that populates the original register state, this means that after four iterations the state will be the same as at the beginning. This does not work in practice because the implementation prohibits null words, but there is a non-null input that has the same effect.</p>
+
+<pre><code>0080 0080 0080 0080
+</code></pre>
+
+<p>The value <code>0x8000</code> XORed with itself is zero, and when it is added to itself it causes an integer overflow that loops around to <code>0x0000</code>. In this sense, the algorithm is "circular". This implies that any value prefixed before these four words will be preserved exactly after four iterations.</p>
+
+<pre><code>b1fe 0080 0080 0080 0080
+</code></pre>
+
+<p>This is not directly relevant to the exploit, but it does demonstrate that this algorithm is not collision resistant (and therefore cryptographically insecure).</p>
+
+<h3>Preimage Attack</h3>
+
+<p>Consider the following input.</p>
+
+<pre><code>fe00 9200 006e f400 0044 4400 </code></pre>
+
+<p>After this password is provided, the register state will be as follows.</p>
+
+<pre><code>pc  e000  sp 43f8  sr 0000  cg 0000
+r04 <mark>9892</mark> r05 260c r06 <mark>42b2</mark> r07 0000 
+r08 47aa r09 0000 r10 1624 r11 1616 
+r12 e000 r13 5070 r14 e000 r15 403c 
+</code></pre>
+
+<p>Recall that <code>R6</code> should be <code>0x9298</code> and <code>R4</code> should be <code>0xfeb1</code>. Not accounting for the fact that endianness is reversed on this iteration, only the first byte in <code>R6</code> is completely wrong (the second is only a single bit off).</p>
+
+<h3>Final Payload</h3>
+<p>The intuition here is that it is possible to "nudge" the value ever closer by providing only one byte of input at a time. This is more of an art than a science. The following input accomplishes this.</p>
+
+<pre><code>b25201000100010000050100000101000004000101000700b55dffff4e01</code></pre>
+
+<h3>Debugger Macros</h3>
+<p>The following debugger macros were used throughout the process of experimentation.</p>
+
+<pre><code>#define vm-reset reset; unbreak e000
+#define vm-init let 44c2=430f; let 44c4=4302; let 456e=430f; let 4570=4302; c; break e000
+#define vm-init-hash c; c; c
+#define vm-iter-hash c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c 
+</code></pre>
+</body></html>
