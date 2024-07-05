@@ -290,7 +290,7 @@ The goal is simple: craft an input such that registers <code>R4</code> and <code
 
 <h5>Control Flow</h5>  
 
-<p>This algorithm iterates over the supplied password, one 16-bit word at a time, to calculate a four byte hash. The relevant sections of the algorithm are depicted below.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+<p>This algorithm iterates over the supplied password, one 16-bit word at a time, to calculate a four-byte hash. The relevant sections of the algorithm are depicted below.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-3" class="sidenote-toggle" />
 <span class="sidenote">
@@ -356,7 +356,7 @@ The goal is simple: craft an input such that registers <code>R4</code> and <code
 <p>The justification for this project was as follows.</p>
 
 <blockquote>
-After staring at the hashing algorithm and the required output values for a while, I concluded that I don't know the required math for solving this sort of puzzle. [...] Adding to my shame at not being able to simply solve for the password with math: the brute force search for 5-byte passwords takes about 12 hours to run on my pretty-modern laptop. Then I thought of a way to salvage my dignity: I know how to design digital logic; I have access to programmable logic hardware; why not build a custom computing machine to find the passwords?
+After staring at the hashing algorithm and the required output values for a while, I concluded that I don't know the required math for solving this sort of puzzle. [...] Adding to my shame at not being able to simply solve for the password with math: the brute-force search for 5-byte passwords takes about 12 hours to run on my pretty-modern laptop. Then I thought of a way to salvage my dignity: I know how to design digital logic; I have access to programmable logic hardware; why not build a custom computing machine to find the passwords?
 	<br>
 	<cite>— Aaron Ferrucci</cite>
 </blockquote>
@@ -369,7 +369,7 @@ After staring at the hashing algorithm and the required output values for a whil
 	That said, yours truly does not begrudge those honor bound to reimplement homebrew hashing algorithms in SystemVerilog to avoid having to commit seppuku (as is required in the blood oath taken by all electrical engineering graduates).
 </span>
 
-It does not need to be reimplemented in a higher level language—in fact, it doesn't require even a single line of code. Only one thing is necessary: perseverence.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+It does not need to be reimplemented in a higher-level language—in fact, it doesn't require even a single line of code. Only one thing is necessary: perseverance.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-3" class="sidenote-toggle" />
 <span class="sidenote">
@@ -391,7 +391,7 @@ It does not need to be reimplemented in a higher level language—in fact, it do
 └─────────┘ └────────────────────┴───────┘
 </code></pre>
 
-<p>As other writeups have observed, this effectively swaps the contents of <code>R4</code> and <code>R6</code>. This would be implemented with a single <code>XCHG</code> instruction on x86 platforms. While this is not valid MSP430 assembly, it makes understanding the algorithm easier. The modified loop is thus as follows.</p>
+<p>As other writeups have observed, this effectively swaps the contents of <code>R4</code> and <code>R6</code>. This would be implemented with a single <code>XCHG</code> instruction on x86 platforms. While this code is not valid MSP430 assembly, it makes understanding the algorithm easier. The modified loop is thus as follows.</p>
 
 <pre><code class="language-ascii-noshadows">┌─────────┐ ┌────────────────────┐◄──────┐
 │         │ │add      @r5, r4    │       │
@@ -761,7 +761,7 @@ It does not need to be reimplemented in a higher level language—in fact, it do
 </ul>
 
 <h4>Reversible Operations</h4>
-<p>Suppose for the sake of argument that it <em>were</em> possible to supply null words as input without terminating the loop. The following ordering would result for each iteration.</p>
+<p>Suppose for the sake of argument that it <em>was</em> possible to supply null words as input without terminating the loop. The following ordering would result for each iteration.</p>
 
 <pre><code class='language-ascii-noshadows'>          ┌─────┐ ┌─────┐
           │ R4  │ │ R6  │
@@ -788,17 +788,17 @@ It does not need to be reimplemented in a higher level language—in fact, it do
 └───────┘ └──┴──┘ └──┴──┘
 </code></pre>
 
-<p>Ignoring the first iteration that populates the original register state, this means that after four iterations the state will be the same as at the beginning. This does not work in practice because the implementation prohibits null words, but there is a non-null input that has the same effect.</p>
+<p>Ignoring the first iteration that populates the original register state, the state will be the same as at the beginning after four iterations. This does not work in practice because the implementation prohibits null words, but there is a non-null input that has the same effect.</p>
 
 <pre><code>0080 0080 0080 0080
 </code></pre>
 
-<p>The value <code>0x8000</code> XORed with itself is zero, and when it is added to itself it causes an integer overflow that loops around to <code>0x0000</code>. In this sense, the algorithm is "circular". This implies that any value prefixed before these four words will be preserved exactly after four iterations.</p>
+<p>The value <code>0x8000</code> XORed with itself is zero, and when it is added to itself, it causes an integer overflow that loops around to <code>0x0000</code>. In this sense, the algorithm is "circular". This implies that any value prefixed before these four words will be preserved exactly after four iterations.</p>
 
 <pre><code>b1fe 0080 0080 0080 0080
 </code></pre>
 
-<p>This is not directly relevant to the exploit, but it does demonstrate that this algorithm is not collision resistant (and therefore cryptographically insecure).</p>
+<p>This is not directly relevant to the exploit, but it does demonstrate that this algorithm is not collision-resistant (and therefore cryptographically insecure).</p>
 
 <h3>Preimage Attack</h3>
 
