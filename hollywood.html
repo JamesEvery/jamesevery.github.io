@@ -32,6 +32,10 @@
  letter-spacing: 0em;
  line-height: 1.16em;
 }
+
+  math {
+     font-family: "Latin Modern";
+  }
     </style>    
 </head>
 
@@ -40,7 +44,8 @@
 
 <body id="top">
   <header>
-    <h1>I’ll See Your FPGA and Raise You a Pencil: Implementing a Preimage Attack on the Back of a Napkin</h1>
+    <h1>I’ll See Your FPGA and Raise You a Pencil:<br> Cracking Hashes on the Back of a Napkin
+    </h1>
 	    </h2>
     <p class="author">
       James Every <br />
@@ -63,11 +68,7 @@
     </h2>
     <b>First Working Exploit:</b> 2157 UTC, July 2nd, 2020
     <br>
-    <b>Solve Count At Time Of Exploit:</b> 519
-    <br>
-    <b>Solves Per Month:</b> 6.57
-    <br>
-    <b>Reading Time:</b> 6 minutes
+    <b>Reading Time:</b> 10 minutes
 
 
     <h5>Rendering Note:</h5>
@@ -79,7 +80,48 @@
 </span>
     <h2>Executive Summary</h2>
 
-    <p>Out of the 50,000 who attempted Microcorruption in the last decade, <a href="https://web.archive.org/web/20220513195347/https://microcorruption.com/hall_of_fame/progress">only the top 1% completed it</a>. Five hundred people have successfully reverse-engineered the firmware for the final challenge. Most write a brute-force script, some use a SAT solver, and one reimplemented the algorithm on an FPGA. This walkthrough documents how to do it with a pencil, a napkin, and a shot of bourbon.</p>
+
+    <p>Fifty thousand people tried this; 
+
+    <a href="https://web.archive.org/web/20220513195347/https://microcorruption.com/hall_of_fame/progress">five hundred succeeded</a>. 
+
+    Ten wrote about it: five brute-forced it in a higher level language,<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	<a href="https://unorde.red/microcorruption-ctf-hollywood/">Alex van Poppelen</a>
+	<br>
+	<a href="https://github.com/ciz/microcorruption">Vítězslav Čížek</a>
+	<br>
+	<a href="https://zijunh.github.io/2019/02/hollywood/">Zijun Hui</a>
+	<br>
+	<a href="https://github.com/Ichiji001/Microcorruption-Solutions/blob/master/%2319%20Hollywood.md">Ichiji001</a>
+	<br>
+	<a href="https://github.com/tux3/microcorruption">Tux3</a>
+</span>
+
+    three used z3,<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	<a href="https://vigeant.segfaults.net/2017-02-20-microcorruption_hollywood-post/">Guillaume Vigeant</a>
+	<br>
+	<a href="https://grazfather.github.io/posts/2018-11-24-microcorruption-hollywood/">Grazfather</a>
+	<br>
+	<a href="https://gist.github.com/laanwj/7020e2fb9922f5c8b4e5522bbd3353fe">Laanwj</a>
+</span>
+
+
+and one broke the algorithm eighteen ways on an FPGA.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	<a href="https://github.com/aaronferrucci/hollywood_fpga_hash">Aaron Ferrucci</a>
+</span>
+
+
+
+Here's how to crack it in five lines of math on the back of a napkin.</p>
 
 <br>
       <figure>
@@ -132,39 +174,39 @@ b012 1000      call    #0x10
 
 <h2>High-Level Analysis</h2>
 
-      <p>In short, the Hollywood firmware includes the following countermeasures.</p>
+      <p>The Hollywood firmware includes the following countermeasures.</p>
 
       <ol>
 	      <li>Jumps into the middle of multi-word instructions to break linear sweep disassemblers.</li>
 	      <li>Runtime packing.</li>
-	      <li>Opcode-level ASLR.</li>
+	      <li>ASLR for <em>each instruction</em>.</li>
+	      <li>The Poor Man's Virtual Machine.</li>
 	      <li>A custom hashing algorithm.</li>
 	      </ol>
 
-	      <p>Other walkthroughs explain how to circumvent these countermeasures in greater detail. Those wishing for a more complete analysis are advised to consult the one by <a href="https://grazfather.github.io/posts/2018-11-24-microcorruption-hollywood/">Grazfather</a>.</p> 
+	      <p>Other walkthroughs explain how to circumvent these countermeasures in greater detail. Those wishing for a more complete analysis should consult the one by <a href="https://grazfather.github.io/posts/2018-11-24-microcorruption-hollywood/">Grazfather</a>.</p> 
 
 	      <h3>Counter-Countermeasures</h3>
-	      <p>The problem posed by the code jumping into the middle of multi-word instructions is relatively simple to circumvent with a program like Ghidra or IDA Pro, which are intelligent enough to follow the actual control flow and avoid instruction mangling. This tooling provides little information because these tools later choke on the runtime packing.</p>
+	      <p>The problem posed by the code jumping into the middle of multi-word instructions is relatively simple to circumvent with a program like Ghidra or IDA Pro, which are intelligent enough to follow the actual control flow and avoid instruction mangling. This tooling provides little information because it later chokes on the runtime packing.</p>
 
-	      <h3>The Poor Man's Virtual Machine</h3>
-	      <p>Another author referred to the runtime packing and opcode-level ASLR as <a href="https://vigeant.segfaults.net/2017-02-20-microcorruption_hollywood-post/">a poor man's virtual machine</a>. The implementation will generate a random number, add it to the base address <code>0xe000</code>, copy one instruction to the resulting randomized address, append a <code>RET</code> instruction, call the gadget, and zero it afterward.</p> 
 
 	      <h4>Breaking The ASLR</h4>
-	      <p>It is difficult to keep track of what is going on when everything is at a random address. The first objective is to break the random number generator so that it always adds zero to the base address. This can be accomplished by using the following debugger macro to patch the <code>rand</code> interrupt calls to always return zero.</p>
+	      <p>The first objective is to break the random number generator so that it always adds zero to the base address. The following debugger macro patches the <code>rand</code> interrupt calls so they always return zero.</p>
 
 	      <pre><code>let 44c2=430f; let 44c4=4302; let 456e=430f; let 4570=4302</code></pre>
 
+	      <h3>The Poor Man's Virtual Machine</h3>
+	      <p>After single-stepping and manually reading a few thousand opcodes, it becomes apparent that there are intermittent calls to address <code>0xe000</code>. On each call, that address will contain a single unique instruction that will execute before returning.
+
+	      Again, this is after breaking the ASLR by patching out the <code>rand</code> calls. If the <code>rand</code> calls are left <em>unpatched</em>, the implementation will generate a random number, add it to the base address <code>0xe000</code>, copy one instruction to the resulting randomized address, append a <code>RET</code> instruction, call the gadget, and zero it afterward. This cycle will then repeat. Another author, Guillaume Vigeant, referred to this behavior as a "<a href="https://vigeant.segfaults.net/2017-02-20-microcorruption_hollywood-post/">poor man's virtual machine</a>".</p>
+
 	      <h4>Extracting The Algorithm</h4>
-	      <p>Even after eliminating the randomization, it is still difficult to grasp what is going on due to the sheer volume of instructions. After single-stepping and manually reading a few thousand opcodes, it becomes apparent that there are intermittent calls to address <code>0xe000</code>, which contains a single instruction that will execute before returning. These opcodes are executed on the "virtual machine" described above and can be "single-stepped" by breaking at address <code>0xe000</code>, continuing, and observing the contents of the <code>PC</code> register with each iteration.</p>
 
-
-	      <pre><code>break e000; c</code></pre>
-
-	      <p>The characters in the following string are printed to the console with every two "steps", where each step is an invocation of the above command.</p>
+	      <p>The "virtual machine" instructions can be single-stepped by breaking at address <code>0xe000</code>, continuing, and observing the contents of the <code>PC</code> register with each iteration. The string below prints to the console, one character at a time, with every two steps.</p>
 
 	      <pre><code>What's the password?</code></pre>
 
-	      <p>The state of the system is only interesting after untrusted input is read. Skipping to the <code>gets</code> interrupt call requires unbreaking address <code>0xe000</code> and continuing, which causes execution to skip to the prompt for user input. The full macro to achieve this is as follows.</p>
+	      <p>The state of the system is only interesting after it reads untrusted input. Skipping to the <code>gets</code> interrupt call requires unbreaking address <code>0xe000</code> and continuing, which causes execution to skip to the prompt for user input. The macro to achieve this, starting from a reset, is as follows.</p>
 
 	      <pre><code>let 44c2=430f; let 44c4=4302; let 456e=430f; let 4570=4302; c; break e000</code></pre>
 
@@ -229,15 +271,7 @@ rra      r7
 bis      r7, sr</code></pre>
 
 <h3>Custom Hashing Algorithm</h3>
-<p>This code is very similar to the bytecode emitted by a JIT compiler. It does not have jumps, which implies that a higher-level abstraction may be generating it on the fly.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
-
-<input type="checkbox" id="sn-3" class="sidenote-toggle" />
-<span class="sidenote">
-	The lack of conditional branches also suggests that this code is resistant to side-channel analysis. 
-</span>
-
-
-</p>
+<p>This code is very similar to the bytecode emitted by a JIT compiler—a higher-level abstraction may be generating it on the fly.</p>
 
 <h5>Success Condition</h5>
 <p>The following checks occur near the end of the algorithm.</p>
@@ -249,7 +283,7 @@ and      sr, r7
 clr      r6
 </code></pre>
 
-<p>This sets the contents of <code>R7</code> based on the result of the <code>CMP</code> instructions. After some massaging, this value is XORed with <code>SR</code>.</p>
+<p>These instructions set the contents of <code>R7</code> based on the boolean result of the <code>CMP</code> instructions. After some massaging, this value is XORed with <code>SR</code>.</p>
 
 <pre><code>rra      r7
 xor      #0x1, r7
@@ -276,23 +310,29 @@ rra      r7
           loading="eager" alt="Status register bits chart." />
       </figure>
 
-      <p>If the previous comparisons fail, the code sets the "CPU OFF" bit in <code>SR</code> via a convoluted series of bitwise operations, halting the processor. If they succeed, that bit remains unset, and the unlock interrupt is called.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+      <p>If the previous comparisons fail, the code sets the "CPU OFF" bit in <code>SR</code> via a convoluted series of bitwise operations, halting the processor.
+
+
+
+
+      If they succeed, that bit remains unset, and the firmware calls the unlock interrupt.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-3" class="sidenote-toggle" />
 <span class="sidenote">
-	The extracted algorithm is taken from an execution trace, which does not include the interrupt call because it is never executed unless the password is valid.
+	The extracted algorithm comes from an execution trace, which does not include the unlock interrupt call because that instruction only executes when the password is valid. 
 </span>
 
-The goal is simple: craft an input such that registers <code>R4</code> and <code>R6</code> contain the values <code>0xfeb1</code> and <code>0x9298</code>, respectively.</p>
+
+The goal is simple: craft an input such that registers <code>R4</code> and <code>R6</code> contain <code>0xfeb1</code> and <code>0x9298</code>, respectively.</p>
 
 
 <h5>Control Flow</h5>  
 
-<p>This algorithm iterates over the supplied password, one 16-bit word at a time, to calculate a four-byte hash. The relevant sections of the algorithm are depicted below.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+<p>This algorithm iterates over the supplied password, one 16-bit word at a time, to calculate a four-byte hash. The diagram below depicts the relevant sections of the algorithm.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-3" class="sidenote-toggle" />
 <span class="sidenote">
-	Only operations that affect the contents of <code>R4</code> and <code>R6</code> are important. The rest of the instructions are omitted for brevity.
+	Only operations that affect the contents of <code>R4</code> and <code>R6</code> are relevant. The diagram omits the rest of the instructions for brevity.
 </span>
 
 
@@ -330,53 +370,12 @@ The goal is simple: craft an input such that registers <code>R4</code> and <code
 </code></pre>
 
 <h5>Constraints</h5>
-<p>The algorithm breaks out of the loop when the current word is null. It is possible to have null <em>bytes</em> in the password, but it is not possible to have null <em>words</em>.</p>
 
-<h2>Brute-Forcing Hollywood in a Custom Computing Machine</h2>
-
-<p>Most people with working exploits reimplement the algorithm in a higher level language, at which point they typically bruteforce the password, although some choose to use z3. Then, there is <a href="https://github.com/aaronferrucci/hollywood_fpga_hash">this guy</a>:</p>
-
-<blockquote>
-	The current revision has 32 hasher cores. The hardware is a Max10 development board, with a 10M50DAF484C6GES device. I was able to clock the accelerator subsystem at 275MHz, and kept the Microproccessor subsystem running at a nice safe 50MHz since it's not in the critical path. The system finds all 18 passwords in about 5 1/4 minutes. Compared to the software solution, that's about a 138x speedup.
-	<br>
-	<cite>— Aaron Ferrucci</cite>
-</blockquote>
-
-<p>This is an FPGA reimplementation of the hashing algorithm that can find all five-byte preimages in the time it takes to make coffee.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
-
-<input type="checkbox" id="sn-3" class="sidenote-toggle" />
-<span class="sidenote">
-	Yours truly would like to congratulate Mr. Ferrucci for becoming a gold medalist in the resume-padding Olympics.
-</span>
-</p>
-
-<h3>Rationale</h3>
-<p>The justification for this project was as follows.</p>
-
-<blockquote>
-After staring at the hashing algorithm and the required output values for a while, I concluded that I don't know the required math for solving this sort of puzzle. [...] Adding to my shame at not being able to simply solve for the password with math: the brute-force search for 5-byte passwords takes about 12 hours to run on my pretty-modern laptop. Then I thought of a way to salvage my dignity: I know how to design digital logic; I have access to programmable logic hardware; why not build a custom computing machine to find the passwords?
-	<br>
-	<cite>— Aaron Ferrucci</cite>
-</blockquote>
-
-<h2>What Math?</h2>
-<p>Contrary to popular belief, breaking this hashing algorithm does not require math, nor does it require bruteforcing, SAT solvers, or FPGAs.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
-
-<input type="checkbox" id="sn-3" class="sidenote-toggle" />
-<span class="sidenote">
-	That said, yours truly does not begrudge those honor-bound to reimplement homebrew hashing algorithms in SystemVerilog to avoid having to commit seppuku (as is required in the blood oath taken by all electrical engineering graduates).
-</span>
-
-It does not need to be reimplemented in a higher-level language—in fact, it doesn't require even a single line of code. Only one thing is necessary: perseverance.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
-
-<input type="checkbox" id="sn-3" class="sidenote-toggle" />
-<span class="sidenote">
-	Also, liquor (ideally 80-proof bourbon).
-</span>
+<p>The algorithm breaks out of the loop when the current word is null. It is possible to have null bytes in the password, but null <em>words</em> are prohibited.</p>
 
 <h3>Understanding The Algorithm</h3>
 
-<p>The hashing algorithm is below. Consider the highlighted section.</p>
+<p>Consider the highlighted section below.</p>
 
 <pre><code class="language-ascii-noshadows">┌─────────┐ ┌────────────────────┐◄──────┐
 │         │ │add      @r5, r4    │       │
@@ -389,7 +388,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
 └─────────┘ └────────────────────┴───────┘
 </code></pre>
 
-<p>As other writeups have observed, this effectively swaps the contents of <code>R4</code> and <code>R6</code>. This would be implemented with a single <code>XCHG</code> instruction on x86 platforms. While this code is not valid MSP430 assembly, it makes understanding the algorithm easier. The modified loop is thus as follows.</p>
+<p>As other writeups have observed, this effectively swaps the contents of <code>R4</code> and <code>R6</code>. The x86 platform typically implements such an operation with a single <code>XCHG</code> instruction. While the following assembly is not valid for the MSP430 ISA, the visual tweak makes the algorithm simpler to understand.</p>
 
 <pre><code class="language-ascii-noshadows">┌─────────┐ ┌────────────────────┐◄──────┐
 │         │ │add      @r5, r4    │       │
@@ -399,6 +398,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
 │         │ │tst      0x0(r5)    │       │
 └─────────┘ └────────────────────┴───────┘
 </code></pre>
+
 
 <h5>Test Input</h5>
 
@@ -416,7 +416,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
 
 <h5>Algorithm Behavior</h5>
 <div id="slides">
-  <section id="int-call-1">
+  <section id="hash-step-1">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├──┬──┤      ├──┬──┤  
@@ -445,7 +445,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
        └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-2">
+  <section id="hash-step-2">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├──┬──┤      ├──┬──┤  
@@ -474,7 +474,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
        └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-3">
+  <section id="hash-step-3">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├──┬──┤      ├──┬──┤  
@@ -503,7 +503,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
        └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-4">
+  <section id="hash-step-4">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├──┬──┤      ├──┬──┤  
@@ -532,7 +532,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
        └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-5">
+  <section id="hash-step-5">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├─────┤◄─────┼─────┤  
@@ -561,7 +561,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
 └──┘   └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-6">
+  <section id="hash-step-6">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├──┬──┤      ├──┬──┤  
@@ -590,7 +590,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
        └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-7">
+  <section id="hash-step-7">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├──┬──┤      ├──┬──┤  
@@ -619,7 +619,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
        └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-8">
+  <section id="hash-step-8">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├──┬──┤      ├──┬──┤  
@@ -648,7 +648,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
        └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-9">
+  <section id="hash-step-9">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├──┬──┤      ├──┬──┤  
@@ -677,7 +677,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
        └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-10">
+  <section id="hash-step-10">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├─────┤◄─────┼─────┤  
@@ -706,7 +706,7 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
 └──┘   └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-11">
+  <section id="hash-step-11">
 <pre><code class='language-ascii-noshadows'>       ┌─────┐      ┌─────┐  
        │ R4  │      │ R6  │  
        ├──┬──┤      ├──┬──┤  
@@ -735,103 +735,639 @@ It does not need to be reimplemented in a higher-level language—in fact, it do
        └────────────────────┘
 </code></pre>
   </section>
-  <section id="int-call-6">
+  <section id="hash-step-6">
 <pre><code class='language-ascii-noshadows'>
 </code></pre>
   </section>
-  <section id="int-call-6">
+  <section id="hash-step-6">
 <pre><code class='language-ascii-noshadows'>
 </code></pre>
   </section>
 </div>
 <ul id="nav">
-  <li><a href="#int-call-1">01</a></li>
-  <li><a href="#int-call-2">02</a></li>
-  <li><a href="#int-call-3">03</a></li>
-  <li><a href="#int-call-4">04</a></li>
-  <li><a href="#int-call-5">05</a></li>
-  <li><a href="#int-call-6">06</a></li>
-  <li><a href="#int-call-7">07</a></li>
-  <li><a href="#int-call-8">08</a></li>
-  <li><a href="#int-call-9">09</a></li>
-  <li><a href="#int-call-10">10</a></li>
-  <li><a href="#int-call-11">11</a></li>
+  <li><a href="#hash-step-1">01</a></li>
+  <li><a href="#hash-step-2">02</a></li>
+  <li><a href="#hash-step-3">03</a></li>
+  <li><a href="#hash-step-4">04</a></li>
+  <li><a href="#hash-step-5">05</a></li>
+  <li><a href="#hash-step-6">06</a></li>
+  <li><a href="#hash-step-7">07</a></li>
+  <li><a href="#hash-step-8">08</a></li>
+  <li><a href="#hash-step-9">09</a></li>
+  <li><a href="#hash-step-10">10</a></li>
+  <li><a href="#hash-step-11">11</a></li>
 </ul>
 
-<h4>Reversible Operations</h4>
-<p>Suppose for the sake of argument that it <em>was</em> possible to supply null words as input without terminating the loop. The following ordering would result for each iteration.</p>
 
-<pre><code class='language-ascii-noshadows'>          ┌─────┐ ┌─────┐
-          │ R4  │ │ R6  │
-          └─────┘ └─────┘
-                         
-┌───────┐ ┌──┬──┐ ┌──┬──┐
-│ i = 0 │ │AA│BB│ │CC│DD│
-└───────┘ └──┴──┘ └──┴──┘
-                         
-┌───────┐ ┌──┬──┐ ┌──┬──┐
-│ i = 1 │ │CC│DD│ │BB│AA│
-└───────┘ └──┴──┘ └──┴──┘
-                         
-┌───────┐ ┌──┬──┐ ┌──┬──┐
-│ i = 2 │ │BB│AA│ │DD│CC│
-└───────┘ └──┴──┘ └──┴──┘
-                         
-┌───────┐ ┌──┬──┐ ┌──┬──┐
-│ i = 3 │ │DD│CC│ │AA│BB│
-└───────┘ └──┴──┘ └──┴──┘
-                         
-┌───────┐ ┌──┬──┐ ┌──┬──┐
-│ i = 4 │ │AA│BB│ │CC│DD│
-└───────┘ └──┴──┘ └──┴──┘
+<h2>Brute-Forcing Hollywood in a Custom Computing Machine</h2>
+
+
+<p>Most people with working exploits reimplement the algorithm in a higher-level language and brute-force the password (although some choose to use z3). Then, there is <a href="https://github.com/aaronferrucci/hollywood_fpga_hash">this individual</a>.</p>
+
+<blockquote>
+I concluded that I don't know the required math for solving this sort of puzzle. [...] Adding to my shame at not being able to simply solve for the password with math: the brute-force search for 5-byte passwords takes about 12 hours to run on my pretty-modern laptop. Then I thought of a way to salvage my dignity: I know how to design digital logic; I have access to programmable logic hardware; why not build a custom computing machine to find the passwords?
+	<br>
+	<cite>— Aaron Ferrucci</cite>
+</blockquote>
+
+<p>This FPGA implementation can brute-force all possible five-byte preimages in the time it takes to make coffee.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	Congratulations to Mr. Ferrucci for becoming a gold medalist in the resume-padding Olympics.
+</span>
+</p>
+
+<pre><code>$ cloc hollywood_fpga_hash/
+      29 text files.
+      28 unique files.                              
+       6 files ignored.
+
+github.com/AlDanial/cloc v 1.86  T=0.03 s (754.2 files/s, 232788.2 lines/s)
+---------------------------------------------------------------------
+Language              files         blank       comment          code
+---------------------------------------------------------------------
+XML                       3             0             0          5094
+Tcl/Tk                    5           108           302           744
+<mark>Verilog-SystemVerilog</mark>     7            74            18           <mark>372</mark>
+C                         2            39             7           288
+Markdown                  1            28             0           188
+Stata                     2             0             0            82
+make                      2             9             0            37
+Mathematica               1             3             0            12
+Bourne Shell              1             0             1             2
+---------------------------------------------------------------------
+SUM:                     24           261           328          6819
+---------------------------------------------------------------------
 </code></pre>
 
-<p>Ignoring the first iteration that populates the original register state, the state will be the same as at the beginning after four iterations. This does not work in practice because the implementation prohibits null words, but there is a non-null input that has the same effect.</p>
 
-<pre><code>0080 0080 0080 0080
-</code></pre>
+<h2>I'll see your custom computing machine and raise you a napkin sketch.</h2>
+<p>Owning this system does not require brute-forcing, SAT solvers, or FPGAs.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
 
-<p>The value <code>0x8000</code> XORed with itself is zero, and when it is added to itself, it causes an integer overflow that loops around to <code>0x0000</code>. In this sense, the algorithm is "circular". This implies that any value prefixed before these four words will be preserved exactly after four iterations.</p>
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	That said, one must not begrudge those honor-bound to reimplement homebrew hashing algorithms in 372 lines of SystemVerilog to avoid obligatory seppuku (as required in the blood oath taken by all computer engineering graduates).
+</span>
 
-<pre><code>b1fe 0080 0080 0080 0080
-</code></pre>
-
-<p>This is not directly relevant to the exploit, but it does demonstrate that this algorithm is not collision-resistant (and therefore cryptographically insecure).</p>
-
-<h3>Preimage Attack</h3>
-
-<p>Consider the following input.</p>
-
-<pre><code>fe00 9200 006e f400 0044 4400 </code></pre>
-
-<p>After this password is provided, the register state will be as follows.</p>
-
-<pre><code>pc  e000  sp 43f8  sr 0000  cg 0000
-r04 <mark>9892</mark> r05 260c r06 <mark>42b2</mark> r07 0000 
-r08 47aa r09 0000 r10 1624 r11 1616 
-r12 e000 r13 5070 r14 e000 r15 403c 
-</code></pre>
-
-<p>Recall that <code>R6</code> should be <code>0x9298</code> and <code>R4</code> should be <code>0xfeb1</code>. Not accounting for the fact that endianness is reversed on this iteration, only the first byte in <code>R6</code> is completely wrong (the second is only a single bit off).</p>
-
-<h3>Final Payload</h3>
-<p>The intuition here is that it is possible to "nudge" the value ever closer by providing only one byte of input at a time. This is more of an art than a science. The following hand-written payload accomplishes this.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+Here is how to break the algorithm with a preimage attack in five lines of math.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">
-	In other words, it is possible to implement this attack by single-stepping execution and poking words into memory until the values match—no napkin or pencil required.
-</span>
-
-</p>
-
-<pre><code>b25201000100010000050100000101000004000101000700b55dffff4e01</code></pre>
+        Why do this? Because yours truly does not like writing C. <a href="https://www.youtube.com/watch?v=XAYhNHhxN0A">Cue the music</a>.
+</span></p>
 
 <h3>Debugger Macros</h3>
-<p>The following debugger macros were used throughout the process of experimentation.</p>
+<p>The following debugger macros were helpful throughout the process of developing this technique.</p>
+
+<br>
+<div id="slides">
+  <section id="macros">
 
 <pre><code>#define vm-reset reset; unbreak e000
 #define vm-init let 44c2=430f; let 44c4=4302; let 456e=430f; let 4570=4302; c; break e000
 #define vm-init-hash c; c; c
 #define vm-iter-hash c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c; c 
 </code></pre>
+
+<p>Invoke the first two macros to set up the environment.</p>
+
+<pre><code>vm-reset
+vm-init
+</code></pre>
+
+<p>Next, the firmware will read the password. After that, the following macro steps until the beginning of the first iteration of the hash loop.</p>
+<pre><code>vm-init-hash
+</code></pre>
+
+<p>At that point, the last command steps one complete hash iteration at a time.</p>
+
+<pre><code>vm-iter-hash
+</code></pre>
+  </section>
+</div>
+<ul id="nav">
+  <li><a href="#macros">Debugger Macros</a></li>
+</ul>
+<h3>Assumptions</h3>
+<p>
+All values are 16-bit integers.
+Let the ordered pair 
+
+<math>
+	<mo>(</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>,
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>)</mo>
+</math>
+
+represent the target image. 
+
+Let
+
+<math>
+	<mi>H</mi>
+</math>
+
+be a hash function, and let</p> 
+
+<blockquote>
+<math>
+	<mi>H</mi>
+	<mo>(</mo>
+	<mi>x</mi>
+	<mo>)</mo>
+	<mo>=</mo>
+	<mo>(</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>,
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>)</mo>
+</math>
+</blockquote>
+
+<p>If 
+
+
+<math>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>=</mo>
+	<mn>0xFEB1</mn>
+</math>
+and
+<math>
+
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>=</mo>
+	<mn>0x9298</mn>
+</math>,
+
+solve for <math><mi>x</mi></math>.
+</p>
+
+<h3>Second Preimage Attack</h3>
+
+<p>Instead of a preimage attack, suppose the goal was to perform a second preimage attack. That process requires finding some value <math><mi>r</mi></math> with the following characteristics.</p>
+
+<blockquote>
+<math>
+	<mn>2</mn>
+	<mi>r</mi>
+	<mo>≡</mo>
+	<mn>0</mn>
+	<mo>mod</mo>
+	<msup>
+		<mn>2</mn>
+		<mn>16</mn>
+	</msup>
+</math>
+<br>
+
+<math>
+	<mi>r</mi>
+	<mo>≠</mo>
+	<mn>0</mn>
+</math>
+
+</blockquote>
+
+<p>The only 16-bit value that satisfies these constraints is <code>0x8000</code>. For any arbitrary value <math><mi>a</mi></math>,</p> 
+
+<blockquote>
+<math>
+	<mi>H</mi>
+	<mo>(</mo>
+	<mi>a</mi>
+	<mo>||</mo>
+	<mi>a</mi>
+	<mo>)</mo>
+	<mo>=</mo>
+
+	<mi>H</mi>
+	<mo>(</mo>
+	<mi>a</mi>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>||</mo>
+	<mi>a</mi>
+	<mo>)</mo>
+</math>
+</blockquote>
+
+<p>By way of example, the following two inputs produce the same hash.</p>
+
+<h5>Input #1:</h5>
+<pre><code>ffff ffff
+</code></pre>
+
+<h5>Input #2:</h5>
+<pre><code>ffff 0080 0080 0080 0080 ffff
+</code></pre>
+
+<h3>Preimage Attack</h3>
+
+<p>
+
+Let <math><mi>f</mi></math> be a function that reverses the endianness of a 16-bit number.
+
+Let the operator <math><mo>||</mo></math> represent a 16-bit little-endian integer concatenation.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	E.g., <math><mo>(</mo><mn>3</mn><mo>||</mo><mn>7</mn><mo>)</mo></math> is <code>"0300 0700"</code>.
+</span>
+
+Given any arbitrary image
+
+<math>
+	<mo>(</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>,
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>)</mo>
+</math>
+on a hypothetical version of the implementation where null words are allowed,</p> 
+
+<blockquote>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>1</mn>
+	</msub>
+	<mo>=</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>⊕</mo>
+	<mn>0xFFFF</mn>
+</math>
+
+<br>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>2</mn>
+	</msub>
+	<mo>=</mo>
+	<mn>0xFFFF</mn>
+</math>
+
+<br>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>=</mo>
+	<mfrac>
+		<mrow>
+			<mi>f</mi>
+			<mo>(</mo>
+		
+		
+			<mi>f</mi>
+			<mo>(</mo>
+			<msub>
+				<mi>R</mi>
+				<mn>6</mn>
+			</msub>
+			<mo>)</mo>
+			<mo>-</mo>
+			<msub>
+				<mi>i</mi>
+				<mn>1</mn>
+			</msub>
+		
+			<mo>)</mo>
+		
+			<mo>⊕</mo>
+			<mn>0xFFFF</mn>
+		</mrow>
+		<mrow>
+			<mn>2</mn>
+		</mrow>
+	</mfrac>
+</math>
+
+<br>
+<math>
+	<mi>H</mi>
+	<mo>(</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>2</mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>1</mn>
+	</msub>
+	<mo>)</mo>
+	<mo>=</mo>
+	<mo>(</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>±</mo>
+	<mn>1</mn>
+	,
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>±</mo>
+	<mn>1</mn>
+	<mo>)</mo>
+</math>
+</blockquote>
+
+<h5>Raw Payload</h5>
+<pre><code>b45d 0000 0000 0000 b45d ffff 4e01
+</code></pre>
+
+<p>On the real implementation, given  
+
+<math>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>=</mo>
+	<mn>0xFEB1</mn>
+</math>
+and
+<math>
+
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>=</mo>
+	<mn>0x9298</mn>
+</math>, 
+</p>
+
+<blockquote>
+<math>
+	<mi>H</mi>
+	<mo>(</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>-</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>⊕</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>+</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>2</mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>1</mn>
+	</msub>
+	<mo>)</mo>
+	<mo>=</mo>
+
+
+	<mo>(</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	,
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>)</mo>
+</math>
+</blockquote>
+
+<h5>Raw Payload</h5>
+<pre><code>b35d 0100 0100 0100 0180 0080 0080 0080 b55d ffff 4e01
+</code></pre>
+
+<h5>Result</h5>
+
+<pre><code>If you were not connected to the debug lock, the door would now be open.
+Try running "solve" in the debug console to see if this solution works without the debugger attached.
+
+The CPU completed in 9979491 cycles.
+</code></pre>
+
+<h3>Alternate Approach</h3>
+
+<p>The above attack is a curated version meant to be easier to understand. The original version, as implemented in July 2020, only relied on the first three equations.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	An earlier revision of this page claimed that breaking the algorithm "does not require math". After digging up and reviewing some four-year-old notes, it is fairer to say that it does not require <em>much</em> math. 
+</span></p>
+
+<blockquote>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>1</mn>
+	</msub>
+	<mo>=</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>⊕</mo>
+	<mn>0xFFFF</mn>
+</math>
+
+<br>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>2</mn>
+	</msub>
+	<mo>=</mo>
+	<mn>0xFFFF</mn>
+</math>
+
+<br>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>=</mo>
+	<mfrac>
+		<mrow>
+			<mi>f</mi>
+			<mo>(</mo>
+		
+		
+			<mi>f</mi>
+			<mo>(</mo>
+			<msub>
+				<mi>R</mi>
+				<mn>6</mn>
+			</msub>
+			<mo>)</mo>
+			<mo>-</mo>
+			<msub>
+				<mi>i</mi>
+				<mn>1</mn>
+			</msub>
+		
+			<mo>)</mo>
+		
+			<mo>⊕</mo>
+			<mn>0xFFFF</mn>
+		</mrow>
+		<mrow>
+			<mn>2</mn>
+		</mrow>
+	</mfrac>
+</math>
+</blockquote>
+
+<p>The original solution involved a degree of tinkering and intuition, so it is not straightforward to formally describe<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	The most succinct summary is "knock a few bits off the first word and plug in low values for the next dozen until it works".
+</span>
+
+the process of going from the simpler theoretical implementation,</p>
+
+<blockquote>
+<math>
+	<mi>H</mi>
+	<mo>(</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn><mark>3</mark></mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn><mark>2</mark></mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn><mark>1</mark></mn>
+	</msub>
+	<mo>)</mo>
+	<mo>=</mo>
+	<mo>(</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>±</mo>
+	<mn>1</mn>
+	,
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>±</mo>
+	<mn>1</mn>
+	<mo>)</mo>
+</math>
+</blockquote>
+
+<p>to the practical implementation.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+Click <a href="./chernobyl.html">here</a> for another episode where yours truly attempts to become the Tiger Woods of code golf.
+</span>
+
+
+</p>
+
+<pre><code>b252 0100 0100 0100 0005 0100 0001 0100 0004 0001 0100 0700 <mark>b55d ffff 4e01</mark>
+</code></pre>
+
+
 </body></html>
