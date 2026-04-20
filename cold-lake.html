@@ -588,9 +588,15 @@ Multiple features should not exist.</p>
 
 <ol>
     <li><b>The load address should be impossible to alter.</b></li>
-    Sign the entire payload as a best practice. It should also be impossible to specify arbitrary load addresses in the first place. The implementation should load debug payloads at a fixed address.
+    The entire payload should be signed as a best practice. It should also be impossible to specify arbitrary load addresses in the first place. The implementation should load debug payloads at a fixed address.
+    <br>
+    <br>
+
     <li><b>Avoid writing untrusted input to the load address before signature verification.</b></li>
     This logic is similar to the <a href="https://moxie.org/2011/12/13/the-cryptographic-doom-principle.html">Cryptographic Doom Principle</a>.</li>
+    <br>
+    <br>
+
     <li><b>Overwrite input buffers with zeroes between iterations.</b></li>
     Data should not persist in memory past its lifetime, regardless of whether the signature verification check passes.
 </ol>
@@ -605,5 +611,5 @@ Multiple features should not exist.</p>
 
 The implementation itself is not technically vulnerable as designed, but it is difficult for developers to avoid compiling vulnerable code that will run within it.</p>
 
-<p>Implementations should attempt to minimize weird corner cases. It is not incumbent on developers to enumerate or understand them. A system that is easy to misconfigure due to excessive complexity is broken.</p>
+<p>Implementations should attempt to minimize weird corner cases. It is not incumbent on developers to enumerate or understand them. A system that is easy to misconfigure due to excessive complexity is a broken system.</p>
 </body></html>

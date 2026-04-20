@@ -221,11 +221,11 @@ Executing debug payload
       </figure>
       <hr>
 
-      <p>Register indirect calls are typically used when the address of the given function is not known at compile time (e.g., for just-in-time compilation). The debug payload may not use a constant load address, requiring reading that address into a register before branching to it after parsing the payload. Achieving successful arbitrary code execution first requires reaching that instruction.</p>
+      <p>Register indirect calls are typically used when the address of the given function is not known at compile time (e.g., for just-in-time compilation), which means the debug payload may not have a constant load address. After parsing the payload, the firmware may load an externally supplied address into a register before branching to it. Hence, achieving successful arbitrary code execution first requires reaching that branch instruction.</p>
 
 <h4>Path to Code Execution</h4>
 
-<p>Whether the code reaches the above instruction is determined by the conditional jump highlighted in light green below:</p>
+<p>Whether the code reaches the aforementioned instruction is determined by the conditional jump highlighted in light green below:</p>
 
 
 <br>
@@ -250,7 +250,7 @@ Executing debug payload
 
 <pre><code>8000<mark>02</mark>3041</code></pre>
 
-<p>The failing conditional branch prints the <code>"Invalid payload length"</code> string to the I/O console.</p>
+<p>The failing branch for this conditional prints the <code>"Invalid payload length"</code> string to the I/O console.</p>
 
 <br>
 <hr>
@@ -259,11 +259,11 @@ Executing debug payload
           loading="eager" alt="Failing conditional branch." />
       </figure>
 
-      <p>This byte must represent the payload length, which the check requires to be 0x2 or higher.</p>
+      <p>Logically, this byte must represent the payload length, which the check requires to be 0x2 or higher.</p>
 
 <h4>Redirecting Execution Flow</h4>
 
-<p>The next obvious question is where the register indirect call goes. The fact that the code performs a register call indicates that the target address is unknown at compile time, which suggests that the implementation reads it from an external source. The code sets the value of <code>R11</code> via the following instructions:</p>
+<p>The next obvious question is where the register indirect call goes. The fact that the code performs a register-based call indicates that the target address is unknown at compile time, which suggests that the implementation reads it from an external source. The code sets the value of <code>R11</code> via the following instructions:</p>
 
 <br>
 <hr>
@@ -443,7 +443,7 @@ and obfuscated Java has closed significantly in the last two decades.</p>
       <h5><em>Fallacy #2</em>: Protocol obscurity will protect the system.</h5>
       <p>Once convinced that code-level obfuscation or compilation is ineffective, developers or technical managers will rationalize that security through obscurity only fails if the attackers can access the firmware. Some embedded systems rely on firmware update image encryption, hardware security, or physically restrictive deployment environments to prevent attackers from acquiring a compiled binary to analyze in the first place.</p>
 
-      <p>This tactic is still ineffective for multiple reasons. First, it is possible to intercept a sample payload and reverse engineer the protocol. Even without access to firmware, it is possible to infer that the third byte is a size field by setting it to zero or one and observing the <code>"Invalid payload length"</code> status message at the I/O console. It is also possible to identify intelligible assembly by disassembling the payload at various offsets, which works well if the executable code segment is significantly larger. This approach provides a heuristic for narrowing down where to insert malicious code. Even without access to a firmware blob, black box protocol analysis against this system (and many others) would not require much effort.</p>
+      <p>This tactic is still ineffective for multiple reasons. First, it is possible to intercept a sample payload and reverse engineer the protocol. For example: even without access to this firmware, it is possible to infer that the third byte is a size field by setting it to zero or one and observing the <code>"Invalid payload length"</code> status message at the I/O console. It is also possible to identify intelligible assembly by disassembling the payload at various offsets, which works well if the executable code segment is significantly larger. This approach provides a heuristic for narrowing down where to insert malicious code. Even without access to a firmware blob, black box protocol analysis against this system (and many others) would not require much effort.</p>
 
       <h3>Patching</h3>
       <p>Security through obscurity does not work. Instead, use sound cryptographic authentication. Implementing public key-based signature verification for the payload eliminates this class of problem.</p>

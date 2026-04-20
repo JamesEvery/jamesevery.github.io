@@ -178,8 +178,8 @@ b012 1000      call    #0x10
       <ol>
 	      <li>Jumps into the middle of multi-word instructions to break linear sweep disassemblers.</li>
 	      <li>Runtime packing.</li>
-	      <li>ASLR for <em>each instruction</em>.</li>
 	      <li>The Poor Man's Virtual Machine.</li>
+	      <li>ASLR for <em>each VM instruction</em>.</li>
 	      <li>A custom hashing algorithm.</li>
 	      </ol>
 
@@ -270,7 +270,7 @@ rra      r7
 bis      r7, sr</code></pre>
 
 <h3>Custom Hashing Algorithm</h3>
-<p>This code is very similar to the bytecode emitted by a JIT compiler—a higher-level abstraction may be generating it on the fly.</p>
+<p>This code superficially resembles the bytecode emitted by a JIT compiler—a higher-level abstraction may be generating it at runtime.</p>
 
 <h5>Success Condition</h5>
 <p>The following checks occur near the end of the algorithm.</p>
@@ -761,7 +761,7 @@ The goal is simple: craft an input such that registers <code>R4</code> and <code
 <h2>Brute-Forcing Hollywood in a Custom Computing Machine</h2>
 
 
-<p>Most people with working exploits reimplement the algorithm in a higher-level language and brute-force the password (although some choose to use z3). Then, there is <a href="https://github.com/aaronferrucci/hollywood_fpga_hash">this individual</a>.</p>
+<p>Most people with working exploits reimplement the algorithm in a higher-level language and brute-force the password (although some choose to use z3). Then, there is <a href="https://github.com/aaronferrucci/hollywood_fpga_hash">this man</a>:</p>
 
 <blockquote>
 I concluded that I don't know the required math for solving this sort of puzzle. [...] Adding to my shame at not being able to simply solve for the password with math: the brute-force search for 5-byte passwords takes about 12 hours to run on my pretty-modern laptop. Then I thought of a way to salvage my dignity: I know how to design digital logic; I have access to programmable logic hardware; why not build a custom computing machine to find the passwords?
@@ -947,7 +947,16 @@ solve for <math><mi>x</mi></math>.
 
 </blockquote>
 
-<p>The only 16-bit value that satisfies these constraints is <code>0x8000</code>. For any arbitrary value <math><mi>a</mi></math>,</p> 
+<p>The only 16-bit value that satisfies these constraints is <code>0x8000</code>.
+
+Let the <math><mo>||</mo></math> operator represent a 16-bit little-endian integer concatenation.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-3" class="sidenote-toggle" />
+<span class="sidenote">
+	E.g., <math><mo>(</mo><mn>3</mn><mo>||</mo><mn>7</mn><mo>)</mo></math> is <code>"0300 0700"</code>.
+</span>
+
+For any arbitrary value <math><mi>a</mi></math>,</p> 
 
 <blockquote>
 <math>
@@ -991,13 +1000,6 @@ solve for <math><mi>x</mi></math>.
 <p>
 
 Let <math><mi>f</mi></math> be a function that reverses the endianness of a 16-bit number.
-
-Let the operator <math><mo>||</mo></math> represent a 16-bit little-endian integer concatenation.<label for="sn-3" class="sidenote-toggle sidenote-number"></label>
-
-<input type="checkbox" id="sn-3" class="sidenote-toggle" />
-<span class="sidenote">
-	E.g., <math><mo>(</mo><mn>3</mn><mo>||</mo><mn>7</mn><mo>)</mo></math> is <code>"0300 0700"</code>.
-</span>
 
 Given any arbitrary image
 
