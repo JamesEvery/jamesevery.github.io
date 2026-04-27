@@ -1227,9 +1227,183 @@ Try running "solve" in the debug console to see if this solution works without t
 The CPU completed in 9979491 cycles.
 </code></pre>
 
+<h3>Completed Napkin Sketch</h3>
+<blockquote>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>1</mn>
+	</msub>
+	<mo>=</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>⊕</mo>
+	<mn>0xFFFF</mn>
+</math>
+
+<br>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>2</mn>
+	</msub>
+	<mo>=</mo>
+	<mn>0xFFFF</mn>
+</math>
+
+<br>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>=</mo>
+	<mfrac>
+		<mrow>
+			<mi>f</mi>
+			<mo>(</mo>
+		
+		
+			<mi>f</mi>
+			<mo>(</mo>
+			<msub>
+				<mi>R</mi>
+				<mn>6</mn>
+			</msub>
+			<mo>)</mo>
+			<mo>-</mo>
+			<msub>
+				<mi>i</mi>
+				<mn>1</mn>
+			</msub>
+		
+			<mo>)</mo>
+		
+			<mo>⊕</mo>
+			<mn>0xFFFF</mn>
+		</mrow>
+		<mrow>
+			<mn>2</mn>
+		</mrow>
+	</mfrac>
+</math>
+
+<br>
+<math>
+	<mi>H</mi>
+	<mo>(</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>2</mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>1</mn>
+	</msub>
+	<mo>)</mo>
+	<mo>=</mo>
+	<mo>(</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>±</mo>
+	<mn>1</mn>
+	,
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>±</mo>
+	<mn>1</mn>
+	<mo>)</mo>
+</math>
+<br>
+<math>
+	<mi>H</mi>
+	<mo>(</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>-</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>⊕</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>||</mo>
+	<mi>r</mi>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>+</mo>
+	<mn>1</mn>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>2</mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>1</mn>
+	</msub>
+	<mo>)</mo>
+	<mo>=</mo>
+
+
+	<mo>(</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	,
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>)</mo>
+</math>
+</blockquote>
+
+
+
+
 <h3>Alternate Approach</h3>
 
-<p>The above attack is a curated version meant to be easier to understand. The original version, as implemented in July 2020, only relied on the first three equations.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+<p>Technically, this attack only requires four lines of math. The approach documented above is a curated version that is intended to be easier to understand. The original version, as implemented in July 2020, did not require the second preimage attack and only utilized the first four equations.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
 
 <input type="checkbox" id="sn-1" class="sidenote-toggle" />
 <span class="sidenote">
@@ -1297,16 +1471,56 @@ The CPU completed in 9979491 cycles.
 		</mrow>
 	</mfrac>
 </math>
+<br>
+<math>
+	<mi>H</mi>
+	<mo>(</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>2</mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>1</mn>
+	</msub>
+	<mo>)</mo>
+	<mo>=</mo>
+	<mo>(</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>±</mo>
+	<mn>1</mn>
+	,
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>±</mo>
+	<mn>1</mn>
+	<mo>)</mo>
+</math>
 </blockquote>
 
-<p>The original solution involved a degree of tinkering and intuition, so it is not straightforward to formally describe<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
-
-<input type="checkbox" id="sn-1" class="sidenote-toggle" />
-<span class="sidenote">
-	The most succinct summary is "knock a few bits off the first word and plug in low values for the next dozen until it works".
-</span>
-
-the process of going from the simpler theoretical implementation,</p>
+<p>The original solution involved manual tinkering and a degree of intuition, so it is not straightforward to formally describe the process of going from the simpler theoretical implementation,</p>
 
 <blockquote>
 <math>
@@ -1357,18 +1571,491 @@ the process of going from the simpler theoretical implementation,</p>
 </math>
 </blockquote>
 
-<p>to the practical implementation.
+<p>to the practical implementation.<label for="sn-1" class="sidenote-toggle sidenote-number"></label>
+
+<input type="checkbox" id="sn-1" class="sidenote-toggle" />
+<span class="sidenote">
+	Commonalities are highlighted.
+</span></p>
+
+<pre><code>b252 0100 0100 0100 0005 0100 0001 0100 0004 0001 0100 0700 <mark>b55d</mark> <mark>ffff</mark> <mark>4e01</mark>
+</code></pre>
+
+
+<h4>Comparison</h4>
+<p>Astute readers will notice certain structural similarities.</p>
+
+<h5>With Preimage Attack:</h5>
+<pre><code><mark>b</mark>3<mark>5</mark>d <mark>0100</mark> <mark>0100</mark> <mark>0100</mark> 0180 0080 0080 0080 <mark>b55d</mark> <mark>ffff</mark> <mark>4e01</mark>
+</code></pre>
+
+<h5>Without Preimage Attack:</h5>
+<pre><code><mark>b</mark>2<mark>5</mark>2 <mark>0100</mark> <mark>0100</mark> <mark>0100</mark> 0005 0100 0001 0100 0004 0001 0100 0700 <mark>b55d</mark> <mark>ffff</mark> <mark>4e01</mark>
+</code></pre>
+
+<p>The manual trial-and-error process required to create the latter payload is not worth discussing here; suffice it to say that it is possible.</p>
+
+<h3>Four lines of math.</h3>
+
+<blockquote>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>1</mn>
+	</msub>
+	<mo>=</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>⊕</mo>
+	<mn>0xFFFF</mn>
+</math>
+
+<br>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>2</mn>
+	</msub>
+	<mo>=</mo>
+	<mn>0xFFFF</mn>
+</math>
+
+<br>
+<math>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>=</mo>
+	<mfrac>
+		<mrow>
+			<mi>f</mi>
+			<mo>(</mo>
+		
+		
+			<mi>f</mi>
+			<mo>(</mo>
+			<msub>
+				<mi>R</mi>
+				<mn>6</mn>
+			</msub>
+			<mo>)</mo>
+			<mo>-</mo>
+			<msub>
+				<mi>i</mi>
+				<mn>1</mn>
+			</msub>
+		
+			<mo>)</mo>
+		
+			<mo>⊕</mo>
+			<mn>0xFFFF</mn>
+		</mrow>
+		<mrow>
+			<mn>2</mn>
+		</mrow>
+	</mfrac>
+</math>
+<br>
+<math>
+	<mi>H</mi>
+	<mo>(</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<mn>0</mn>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>3</mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>2</mn>
+	</msub>
+	<mo>||</mo>
+	<msub>
+		<mi>i</mi>
+		<mn>1</mn>
+	</msub>
+	<mo>)</mo>
+	<mo>=</mo>
+	<mo>(</mo>
+	<msub>
+		<mi>R</mi>
+		<mn>4</mn>
+	</msub>
+	<mo>±</mo>
+	<mn>1</mn>
+	,
+	<msub>
+		<mi>R</mi>
+		<mn>6</mn>
+	</msub>
+	<mo>±</mo>
+	<mn>1</mn>
+	<mo>)</mo>
+</math>
+</blockquote>
+
+<h3>And now, 372 lines of SystemVerilog.</h3>
+
+<code>$ cat hollywood_hash_core.sv</code>
+<pre><code><xmp>`default_nettype none
+`timescale 1ns / 1ns
+module hollywood_unhash_core #(
+    parameter R4 = 16'hFEB1,
+    parameter R6 = 16'h9298
+  )
+  (
+    input wire in_valid,
+    input wire in_channel,
+    input wire [15:0] in_data,
+    output reg out_valid,
+    output reg out_data, 
+    input wire clk,
+    input wire reset
+  );
+  reg [15:0] r4, r6;
+  wire [15:0] swapped = {in_data[7:0], in_data[15:8]};
+  wire [15:0] next_r4, preswap_next_r6, next_r6;
+  assign next_r4 = r6 ^ swapped;
+  assign preswap_next_r6 = r4 + swapped;
+  assign next_r6 = {preswap_next_r6[7:0], preswap_next_r6[15:8]};
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      r4 <= '0;
+      r6 <= '0;
+    end
+    else begin
+      if (in_valid) begin
+        if (in_channel) begin
+          r4 <= '0;
+          r6 <= '0;
+        end
+        else begin
+          r4 <= next_r4;
+          r6 <= next_r6;
+        end
+      end
+    end
+  end
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      out_valid <= '0;
+    end
+    else begin
+      out_valid <= (r6 == R6) && (r4 == R4);
+    end
+  end
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      out_data <= '0;
+    end
+    else begin
+        out_data <= '0;
+    end
+  end
+endmodule
+`default_nettype wire
+</xmp></code></pre>
+
+<code>$ cat hollywood_hash_top.sv</code>
+<pre><code><xmp>`default_nettype none
+`timescale 1ns / 1ns
+module hollywood_hash_top(
+  output wire [4:0] LED,
+  input wire  clk_50,
+  input wire  global_reset_n
+);
+  wire pll_locked;
+  wire [4:0] pio_val;
+  hollywood_hash hasher (
+    .reset_bridge_0_in_reset_reset_n (global_reset_n),
+    .clk_50_in_clk (clk_50),
+    .clk_adc_out_clk (),
+    .leds_export (pio_val),
+	 .pll_c0_conduit_export (),
+	 .pll_c1_conduit_export (),
+	 .pll_c4_conduit_export (),
+    .pll_areset_conduit_export (1'b0),
+    .pll_locked_conduit_export (pll_locked)
+  );
+  assign LED = ~pio_val;
+endmodule
+`default_nettype wire
+</xmp></code></pre>
+
+<code>$ cat pw_gen.sv</code>
+
+<input type="checkbox" id="sn-98" class="sidenote-toggle" />
+<span class="sidenote">
+	This is one of the rare sports where saying "mine is smaller than yours" is bragging.
+</span>
+<pre><code><xmp>`default_nettype none
+`timescale 1ns / 1ns
+module pw_gen #(
+  parameter 
+    PW1_RESET = 16'b0,
+    PW2_RESET = 16'b0,
+    PW3_RESET = 8'b0,
+    PW3_FINAL = 8'hFF) (
+    input wire in_write,
+    input wire in_read,
+    input wire in_addr, 
+    input wire [31:0] in_writedata,
+    output reg [31:0] in_readdata,
+    output reg out_valid,
+    output reg out_channel,
+    output reg [15:0] out_data,
+    input wire req_valid,
+    input wire req_data, 
+    output reg store_write,
+    output reg [5:0] store_addr,
+    output reg [15:0] store_writedata,
+    input wire store_waitrequest,
+    input wire clk,
+    input wire reset
+);
+  reg [15:0] pw1;
+  reg [15:0] pw2;
+  reg [7:0] pw3;
+  typedef enum {
+    ST_IDLE,
+    ST_MGMT,
+    ST1,
+    ST2,
+    ST3
+  } t_state;
+  t_state state, p1_state;
+  reg p1_channel;
+  reg p1_valid;
+  reg [15:0] p1_data;
+  reg [15:0] p_pw1;
+  reg [15:0] p_pw2;
+  reg [7:0] p_pw3;
+  reg run;
+  reg pw1_overflow, pw2_overflow, pw3_overflow;
+  always_comb begin : state_transition
+    p1_state = ST_IDLE;
+    p1_channel = '0;
+    p1_data = '0;
+    p1_valid = '0;
+    p_pw1 = pw1;
+    p_pw2 = pw2;
+    p_pw3 = pw3;
+    case (state)
+      ST_IDLE: begin
+        if (run) begin
+          p1_state = ST1;
+          p1_channel = '0;
+          p_pw1 = pw1 + 1'b1;
+          p1_valid = '1;
+        end
+        else begin
+          p_pw1 = PW1_RESET[15:0];
+          p_pw2 = PW2_RESET[15:0];
+          p_pw3 = PW3_RESET[7:0];
+        end
+      end
+      ST1: begin
+        p1_state = ST2;
+        p1_channel = '0;
+        p1_valid = '1;
+        p1_data = pw2;
+        if (pw1_overflow)
+          p_pw2 = pw2 + 1'b1;
+      end
+      ST2: begin
+        p1_state = ST3;
+        p1_channel = '0;
+        p1_valid = '1;
+        p1_data = {pw3, 8'b0};
+        if (pw2_overflow)
+          p_pw3 = pw3 + 1'b1;
+      end
+      ST3: begin
+        p1_state = ST_MGMT;
+        p1_channel = '1;
+        p1_data = '0;
+        p1_valid = '1;
+      end
+      ST_MGMT: begin
+        if (run) begin
+          p1_state = ST1;
+          p1_channel = '0;
+          p1_valid = '1;
+          p1_data = pw1;
+          p_pw1 = pw1 + 1'b1;
+        end
+        else begin
+          p1_state = ST_IDLE;
+        end
+      end
+    endcase
+  end
+  always @*
+    in_readdata = { {31 {1'b0}}, run};
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      run <= '0;
+    end
+    else begin
+      if (in_write) begin
+        run <= in_writedata[0];
+      end
+      else if (pw3_overflow) begin
+        run <= '0;
+      end
+    end
+  end
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      pw1 <= PW1_RESET[15:0];
+      pw2 <= PW2_RESET[15:0];
+      pw3 <= PW3_RESET[7:0];
+      pw1_overflow <= '0;
+      pw2_overflow <= '0;
+      pw3_overflow <= '0;
+    end
+    else begin
+      pw1 <= p_pw1;
+      pw2 <= p_pw2;
+      pw3 <= p_pw3;
+      pw1_overflow <= pw1 == 16'hFFFF;
+      pw2_overflow <= pw1_overflow && (pw2 == 16'hFFFF);
+      pw3_overflow <= pw1_overflow && pw2_overflow && (pw3 == PW3_FINAL);
+    end
+  end
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      state <= ST_IDLE;
+      out_channel <= '1;
+      out_data <= '0;
+      out_valid <= '0;
+    end
+    else begin
+      state <= p1_state;
+      out_channel <= p1_channel;
+      out_data <= p1_data;
+      out_valid <= p1_valid;
+    end
+  end
+  reg received_req;
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      store_write <= '0;
+      store_writedata <= '0;
+      store_addr <= '0;
+      received_req <= '0;
+    end
+    else begin
+      store_write <= p1_valid;
+      store_writedata <= p1_data;
+      if (req_valid)
+        received_req <= '1;
+      else if (state == ST_MGMT)
+        received_req <= '0;
+      if (p1_valid) begin
+        if (state == ST_IDLE) begin
+          store_addr <= '0;
+        end
+        else if (!received_req && (state == ST_MGMT)) begin
+          store_addr &= 6'b1111_00;
+        end
+        else begin
+          store_addr <= store_addr + 6'h1;
+        end
+      end
+    end
+  end
+endmodule
+`default_nettype wire
+</xmp></code></pre>
+
+<code>$ cat sim_top.sv</code> 
+<pre><code><xmp>`timescale 1ns/1ns
+`default_nettype none
+module sim_top;
+  test_pw_gen_tb tb();
+  test_program pgm();
+endmodule
+`default_nettype wire
+</xmp></code></pre>
+
+
+<code>$ cat test_program.sv</code>
+
 
 <input type="checkbox" id="sn-99" class="sidenote-toggle" />
 <span class="sidenote">
-For another episode in which yours truly attempts to become the Tiger Woods of code golf, click <a href="./chernobyl.html">here</a>. 
+For another episode in which yours truly attempts to become the Tiger Woods of exploit development code golf, click <a href="./chernobyl.html">here</a>. 
 </span>
 
+<pre><code><xmp>`timescale 1ns/1ns
+`default_nettype none
+`define CLK sim_top.tb.test_pw_gen_inst_clock_bfm.clk
+`define RESET sim_top.tb.test_pw_gen_inst_reset_bfm.reset
+`define CSR sim_top.tb.test_pw_gen_inst_csr_bfm
+`define OUT sim_top.tb.test_pw_gen_inst_out_bfm
+`define REQ sim_top.tb.test_pw_gen_inst_req_bfm
+`define DUT sim_top.tb.test_pw_gen_inst.pw_gen_0
+module test_program;
+  import avalon_mm_pkg::*;
+  initial begin
+    fork
+      begin
+        init();
+        wait(~`RESET);
+        repeat(2) @(posedge `CLK);
+        test_run();
+      end
+      begin : drive_req
+        repeat(100) @(negedge `OUT.sink_channel);
+        $display("%t: 100 falling edges", $time());
+        `REQ.set_transaction_data(0);
+        `REQ.push_transaction();
+      end
+    join
+    @(posedge `CLK);
+    repeat(10) @(posedge `CLK);
+    $stop;
+  end
+  task automatic init;
+    `CSR.init();
+    `OUT.init();
+    `REQ.init();
+  endtask
+  task automatic test_run;
+    `CSR.set_command_address(0);
+    `CSR.set_command_data(1, 0);
+    `CSR.set_command_request(REQ_WRITE);
+    `CSR.push_command();
+    repeat(5)
+      @(posedge `CLK);
+    repeat(3 * 65536) begin
+      @(posedge `CLK);
+      wait(`OUT.signal_transaction_received);
+    end
+    repeat(10)
+      @(posedge `CLK);
+  endtask
+endmodule
+`default_nettype wire
+</xmp></code></pre>
 
-</p>
 
-<pre><code>b252 0100 0100 0100 0005 0100 0001 0100 0004 0001 0100 0700 <mark>b55d ffff 4e01</mark>
-</code></pre>
-
+<!--
+Your move, Aaron.
+-->
 
 </body></html>
