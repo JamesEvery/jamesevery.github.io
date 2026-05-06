@@ -1,4 +1,4 @@
-section {background-color: #fff; border: 0px solid #fff; display: none; width: 100%; margin: 15px auto; text-align: left;}
+section {border: 0px solid #fff; display: none; width: 100%; margin: 15px auto; text-align: left;}
 section:target {display: block;}
 
 #nav,
